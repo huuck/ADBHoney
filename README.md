@@ -19,8 +19,11 @@ More advanced commands (like native directory listing and having and interactive
 
 # OK OK, how do I get it started?
 Just start the script in python:
+
 `nohup python main.py &`
+
 Just like that, shouldn't have any more complex dependencies.
+
 I'm working on this in my free time, so it's still a debugging build. You can remove the debug messages by hand or just do a `strings nohup.out | grep -v "<<<<" | grep -v ">>>>" | less` if you want to get some data right away.
 
 ## Credits
