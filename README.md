@@ -17,5 +17,11 @@ Right now you can `adb connect`, `adb push` and `adb shell` into it. All of the 
 ## What doesn't work?
 More advanced commands (like native directory listing and having and interactive shell) won't work. The main reason is that I haven't found any kind of malware to take advantage of mechanisms like this. I've also had to reverse engineer the protocol flow by hand, so please also provide a **.pcap** when logging an issue so I can look into it (or VERY exact steps for reproduction). Any improvements will be more than welcome.
 
+# OK OK, how do I get it started?
+Just start the script in python:
+`nohup python main.py &`
+Just like that, shouldn't have any more complex dependencies.
+I'm working on this in my free time, so it's still a debugging build. You can remove the debug messages by hand or just do a `strings nohup.out | grep -v "<<<<" | grep -v ">>>>" | less` if you want to get some data right away.
+
 ## Credits
 Hat tip to [sporsh](https://github.com/sporsh) for his [awesome work](https://github.com/sporsh/twisted-adb/blob/master/adb/protocol.py) on providing the community with some wrappers for ADB messages.
