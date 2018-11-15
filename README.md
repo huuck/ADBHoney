@@ -1,4 +1,4 @@
-#### follow me on twitter @hookgab for the latest updates
+#### follow me on twitter [@hookgab](https://twitter.com/hookgab) for the latest updates
 
 # ADBHoney
 Low interaction honeypot designed for Android Debug Bridge over TCP/IP
