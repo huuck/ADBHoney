@@ -16,3 +16,6 @@ Right now you can `adb connect`, `adb push` and `adb shell` into it. All of the 
 
 ## What doesn't work?
 More advanced commands (like native directory listing and having and interactive shell) won't work. The main reason is that I haven't found any kind of malware to take advantage of mechanisms like this. I've also had to reverse engineer the protocol flow by hand, so please also provide a **.pcap** when logging an issue so I can look into it (or VERY exact steps for reproduction). Any improvements will be more than welcome.
+
+## Credits
+Hat tip to [sporsh](https://github.com/sporsh) for his [awesome work](https://github.com/sporsh/twisted-adb/blob/master/adb/protocol.py) on providing the community with some wrappers for ADB messages.
