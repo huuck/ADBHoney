@@ -30,3 +30,5 @@ I'm working on this in my free time, so it's still a debugging build. You can re
 
 ## Credits
 Hat tip to [sporsh](https://github.com/sporsh) for his [awesome work](https://github.com/sporsh/twisted-adb/blob/master/adb/protocol.py) on providing the community with some wrappers for ADB messages.
+
+#### follow me on twitter [@hookgab](https://twitter.com/hookgab) for the latest updates
