@@ -12,11 +12,9 @@ from protocol import AdbMessage
 
 TCP_IP = '0.0.0.0'
 TCP_PORT = 5555
-
-#don't get stuck on reading the same empty packets from some bad guys
 MAX_READ_COUNT = 4096*4096
-#numbers determined by empirical research :/
-MAX_EMPTY_PACKETS = 4096*4096*4096
+#sleep 1 second after each empty packets, wait 1 hour in total
+MAX_EMPTY_PACKETS = 360
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 """ Set TCP keepalive on an open socket.
@@ -58,6 +56,8 @@ def process_connection(conn, addr):
 			empty_packets += 1
 			if empty_packets > MAX_EMPTY_PACKETS:
 				return
+			#wait for more data
+			time.sleep(1)
 			continue
 		empty_packets = 0
 		debug_content += command
