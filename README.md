@@ -17,7 +17,7 @@ The purpose of this project is to provide a low interaction honeypot designed to
 Right now you can `adb connect`, `adb push` and `adb shell` into it. All of the data is redirected to stdout and files will be saved to disk. CPU/memory usage should be fairly low, any anormalities should be reported so I can look into them. There's a lot of black magic inside, so please be kind when logging an issue.
 
 ## What doesn't work?
-__Latest ADB that I've managed to trick into connecting is **1.0.32** Can't get anything newer to connect. If you have any insight in this, feel free to submit a patch.__
+~~Latest ADB that I've managed to trick into connecting is **1.0.32** Can't get anything newer to connect. If you have any insight in this, feel free to submit a patch.~~
 
 Should be stable now, if it has any more problems poke me.
 
