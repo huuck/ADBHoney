@@ -205,7 +205,7 @@ def process_connection(conn, addr):
 		sys.stdout.flush()
         
             elif states[-1] == protocol.CMD_CNXN:
-                send_message(conn, protocol.CMD_CNXN, 0, 1, "device::ro.product.name=hlteuc;ro.product.model=SAMSUNG-SM-N900A;ro.product.device=hlteatt;.") 
+                send_message(conn, protocol.CMD_CNXN, 0x01000000, 4096, "device::http://ro.product.name =starltexx;ro.product.model=SM-G960F;ro.product.device=starlte;features=cmd,stat_v2,shell_v2") 
             elif states[-1] == protocol.CMD_OPEN and "sync" not in message.data:
                 send_message(conn, protocol.CMD_OKAY, 2, message.arg0, "")
             elif states[-1] == protocol.CMD_OPEN:
