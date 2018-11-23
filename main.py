@@ -15,21 +15,6 @@ MAX_READ_COUNT = 4096 * 4096
 # sleep 1 second after each empty packets, wait 1 hour in total
 MAX_EMPTY_PACKETS = 360
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-""" Set TCP keepalive on an open socket.
-
-    It activates after 1 second (after_idle_sec) of idleness,
-    then sends a keepalive ping once every 1 seconds (interval_sec),
-    and closes the connection after 100 failed ping (max_fails)
-"""
-s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)
-s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 100)
-s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
-s.bind((TCP_IP, TCP_PORT))
-s.listen(1)
-
 
 def dump_file_data(addr, real_fname, data):
     fname = "data-%s.raw" % hashlib.sha256(data).hexdigest()
@@ -52,17 +37,17 @@ def process_connection(conn, addr):
     dropped_file = ""
     empty_packets = 0
     while True:
+        debug_content = bytes()
         try:
-            debug_content = bytes()
             command = conn.recv(4)
             if not command:
                 empty_packets += 1
                 if empty_packets > MAX_EMPTY_PACKETS:
-                    conn.close()
-                    return
+                    break
                 # wait for more data
                 time.sleep(1)
                 continue
+            filename = 'unknown'
             empty_packets = 0
             debug_content += command
             arg1 = conn.recv(4)
@@ -77,15 +62,13 @@ def process_connection(conn, addr):
             data_content = bytes()
 
             if data_length > 0:
-                read_bytes = 0
-
                 # prevent reading the same stuff over and over again from some other attackers and locking the honeypot
                 # max 1 byte read 64*4096 times (max packet length for ADB)
                 read_count = 0
 
                 while len(data_content) < data_length and read_count < MAX_READ_COUNT:
                     read_count += 1
-                    # dont' overread the content of the next data packet
+                    # don't overread the content of the next data packet
                     bytes_to_read = data_length - len(data_content)
                     data_content += conn.recv(bytes_to_read)
 
@@ -93,17 +76,14 @@ def process_connection(conn, addr):
                 pass
             # check integrity of read data
             if len(data_content) < data_length:
-                # corrupt content, abord the connection (probably not an ADB client)
-                conn.close()
-                return
+                # corrupt content, abort the connection (probably not an ADB client)
+                break
             # assemble a full data packet as per ADB specs
             data = command + arg1 + arg2 + data_length_raw + data_crc + magic + data_content
         except Exception as ex:
             print '%s\t%s\t %s : %s' % (int(time.time()), str(addr).ljust(24), repr(ex), repr(debug_content))
-            conn.close()
-            return
+            break
 
-        message = None
         try:
             message = AdbMessage.decode(data)[0]
             # print message
@@ -114,15 +94,15 @@ def process_connection(conn, addr):
                 print "<<<<%s" % string
         except Exception as e:
             # don't print anything, a lot of garbage coming in usually, just drop the connection
-            conn.close()
-            return
+            break
 
         # keep a record of all the previous states in order to handle some weird cases
         states.append(message.command)
 
         # corner case for binary sending
         if sending_binary:
-            # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent (i.e. DATA\x00\x00\x01\x00)
+            # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent
+            # (i.e. DATA\x00\x00\x01\x00)
             if message.command == protocol.CMD_WRTE and "DATA" in message.data:
                 data_index = message.data.index("DATA")
                 payload_fragment = message.data[:data_index] + message.data[data_index + 8:]
@@ -222,9 +202,34 @@ def process_connection(conn, addr):
             elif states[-1] == protocol.CMD_WRTE and "QUIT" in message.data:
                 send_message(conn, protocol.CMD_OKAY, 2, message.arg0, "")
                 send_message(conn, protocol.CMD_CLSE, 2, message.arg0, "")
+    conn.close()
 
 
-while True:
-    conn, addr = s.accept()
-    print '%s\t%s\t + connection start' % (int(time.time()), str(addr).ljust(24))
-    threading.Thread(target=process_connection, args=(conn, addr)).start()
+def main_coonection_loop(bind_addr, bind_port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    """ Set TCP keepalive on an open socket.
+
+        It activates after 1 second (after_idle_sec) of idleness,
+        then sends a keepalive ping once every 1 seconds (interval_sec),
+        and closes the connection after 100 failed ping (max_fails)
+    """
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)
+    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 100)
+    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
+    s.bind((bind_addr, bind_port))
+    s.listen(1)
+    try:
+        while True:
+            conn, addr = s.accept()
+            print '%s\t%s\t + connection start' % (int(time.time()), str(addr).ljust(24))
+            threading.Thread(target=process_connection, args=(conn, addr)).start()
+
+    except KeyboardInterrupt:
+        s.close()
+        print 'Exiting...'
+
+
+if __name__ == '__main__':
+    main_coonection_loop(TCP_IP, TCP_PORT)
