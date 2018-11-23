@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import traceback
 import socket
 import protocol
 import time
@@ -7,10 +6,10 @@ import struct
 import threading
 import sys
 import hashlib
+from argparse import ArgumentParser
 from protocol import AdbMessage
 
-TCP_IP = '0.0.0.0'
-TCP_PORT = 5555
+
 MAX_READ_COUNT = 4096 * 4096
 # sleep 1 second after each empty packets, wait 1 hour in total
 MAX_EMPTY_PACKETS = 360
@@ -220,6 +219,7 @@ def main_coonection_loop(bind_addr, bind_port):
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
     s.bind((bind_addr, bind_port))
     s.listen(1)
+    print 'Listening on %s:%d.' % (bind_addr, bind_port)
     try:
         while True:
             conn, addr = s.accept()
@@ -232,4 +232,20 @@ def main_coonection_loop(bind_addr, bind_port):
 
 
 if __name__ == '__main__':
-    main_coonection_loop(TCP_IP, TCP_PORT)
+
+    addr = '0.0.0.0'
+    port = 5555
+
+    parser = ArgumentParser(description='ADBHoney', add_help=True)
+    parser.add_argument('--addr', type=str, help='Address where bind to')
+    parser.add_argument('--port', type=str, help='Port to listen')
+
+    args = parser.parse_args()
+
+    if args.addr:
+        addr = args.addr
+
+    if args.port:
+        port = int(args.port)
+
+    main_coonection_loop(addr, port)
