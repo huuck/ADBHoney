@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-import socket
-import protocol
-import time
-import struct
-import threading
-import sys
 import hashlib
+import os
+import protocol
+import socket
+import struct
+import sys
+import threading
+import time
 from argparse import ArgumentParser
 from protocol import AdbMessage
 
@@ -17,11 +18,12 @@ MAX_EMPTY_PACKETS = 360
 
 def dump_file_data(addr, real_fname, data):
     fname = "data-%s.raw" % hashlib.sha256(data).hexdigest()
-    with open(fname, "wb") as f:
+    if not os.path.exists(fname):
         print "%s\t%s\tfile:%s - dumping %s bytes of data to %s..." % (
-        int(time.time()), str(addr).ljust(24), real_fname, len(data), fname)
+            int(time.time()), str(addr).ljust(24), real_fname, len(data), fname)
         sys.stdout.flush()
-        f.write(data)
+        with open(fname, "wb") as f:
+            f.write(data)
 
 
 def send_message(conn, command, arg0, arg1, data):
