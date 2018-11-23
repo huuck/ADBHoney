@@ -35,6 +35,7 @@ def process_connection(conn, addr):
     sending_binary = False
     dropped_file = ""
     empty_packets = 0
+    filename = 'unknown'
     while True:
         debug_content = bytes()
         try:
@@ -46,7 +47,6 @@ def process_connection(conn, addr):
                 # wait for more data
                 time.sleep(1)
                 continue
-            filename = 'unknown'
             empty_packets = 0
             debug_content += command
             arg1 = conn.recv(4)
