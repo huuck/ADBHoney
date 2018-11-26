@@ -20,10 +20,12 @@ CMD_OKAY = 0x59414b4f
 CMD_CLSE = 0x45534c43
 CMD_WRTE = 0x45545257
 
+
 def getCommandString(commandCode):
     """Returns a readable string representation of a message code
     """
     return struct.pack('<L', commandCode)
+
 
 class AdbMessage(object):
     def __init__(self, command, arg0, arg1, data=''):
@@ -34,12 +36,12 @@ class AdbMessage(object):
 
     @property
     def header(self):
-	data_check = sum(ord(c) for c in self.data)
-        #data_check = '\xbc\xb1\xa7\xb1'
-	#data_check = ''
-	#import zlib
-	#data_check = zlib.crc32(self.data)
-	magic = self.command ^ 0xffffffff
+        data_check = sum(ord(c) for c in self.data)
+        # data_check = '\xbc\xb1\xa7\xb1'
+        # data_check = ''
+        # import zlib
+        # data_check = zlib.crc32(self.data)
+        magic = self.command ^ 0xffffffff
         return AdbMessageHeader(self.command,
                                 self.arg0,
                                 self.arg1,
@@ -50,7 +52,7 @@ class AdbMessage(object):
     @classmethod
     def decode(cls, data):
         header, data = AdbMessageHeader.decode(data)
-        #if len(data) < header.data_length:
+        # if len(data) < header.data_length:
         #    return
         message = cls(header.command, header.arg0, header.arg1, data)
         message.validate(header)
@@ -60,17 +62,17 @@ class AdbMessage(object):
         return self.header.encode() + self.data
 
     def validate(self, header):
-        #assert self.header == header
-	assert True
+        # assert self.header == header
+        assert True
 
     def __eq__(self, other):
         return self.header == other.header and self.data == other.data
 
     def __repr__(self):
-	#if len(self.data) > 32:
-	#	data = "*"
-	#else:
-	#	data = self.data
+        # if len(self.data) > 32:
+        #	data = "*"
+        # else:
+        #	data = self.data
         return "%s(%r)" % (self.header, self.data)
 
 
@@ -112,12 +114,12 @@ class AdbMessageHeader(tuple):
     @classmethod
     def decode(cls, data):
         length = struct.calcsize(cls._fmt)
-        #if len(data) < length:
+        # if len(data) < length:
         #    return
         args = struct.unpack(cls._fmt, data[:length])
         return cls(*args), data[length:]
 
     def __str__(self, *args, **kwargs):
         return str((getCommandString(self.command),
-                   self.arg0, self.arg1, self.data_length,
-                   self.data_check, self.magic))
+                    self.arg0, self.arg1, self.data_length,
+                    self.data_check, self.magic))
