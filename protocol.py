@@ -20,10 +20,12 @@ CMD_OKAY = 0x59414b4f
 CMD_CLSE = 0x45534c43
 CMD_WRTE = 0x45545257
 
+
 def getCommandString(commandCode):
     """Returns a readable string representation of a message code
     """
     return struct.pack('<L', commandCode)
+
 
 class AdbMessage(object):
     def __init__(self, command, arg0, arg1, data=''):
@@ -50,7 +52,7 @@ class AdbMessage(object):
     @classmethod
     def decode(cls, data):
         header, data = AdbMessageHeader.decode(data)
-        #if len(data) < header.data_length:
+        # if len(data) < header.data_length:
         #    return
         message = cls(header.command, header.arg0, header.arg1, data)
         message.validate(header)
@@ -112,12 +114,12 @@ class AdbMessageHeader(tuple):
     @classmethod
     def decode(cls, data):
         length = struct.calcsize(cls._fmt)
-        #if len(data) < length:
+        # if len(data) < length:
         #    return
         args = struct.unpack(cls._fmt, data[:length])
         return cls(*args), data[length:]
 
     def __str__(self, *args, **kwargs):
         return str((getCommandString(self.command),
-                   self.arg0, self.arg1, self.data_length,
-                   self.data_check, self.magic))
+                    self.arg0, self.arg1, self.data_length,
+                    self.data_check, self.magic))
