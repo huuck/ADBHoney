@@ -220,9 +220,9 @@ def main_coonection_loop(bind_addr, bind_port):
         and closes the connection after 100 failed ping (max_fails)
     """
     s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)
-    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 100)
+    # s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)
+    # s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+    # s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 100)
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
     s.bind((bind_addr, bind_port))
     s.listen(1)
