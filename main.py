@@ -14,10 +14,15 @@ from protocol import AdbMessage
 MAX_READ_COUNT = 4096 * 4096
 # sleep 1 second after each empty packets, wait 1 hour in total
 MAX_EMPTY_PACKETS = 360
+DL_FOLDER = '.'
 
 
 def dump_file_data(addr, real_fname, data):
-    fname = "data-%s.raw" % hashlib.sha256(data).hexdigest()
+
+    if not os.path.exists(DL_FOLDER):
+        os.makedirs(DL_FOLDER)
+
+    fname = os.path.join(DL_FOLDER, "data-%s.raw" % hashlib.sha256(data).hexdigest())
     if not os.path.exists(fname):
         print "%s\t%s\tfile:%s - dumping %s bytes of data to %s..." % (
             int(time.time()), str(addr).ljust(24), real_fname, len(data), fname)
@@ -241,6 +246,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='ADBHoney', add_help=True)
     parser.add_argument('--addr', type=str, help='Address where bind to')
     parser.add_argument('--port', type=str, help='Port to listen')
+    parser.add_argument('--dlfolder', type=str, help='Folder to save payloads')
 
     args = parser.parse_args()
 
@@ -249,5 +255,8 @@ if __name__ == '__main__':
 
     if args.port:
         port = int(args.port)
+
+    if args.dlfolder:
+        DL_FOLDER = args.dlfolder
 
     main_coonection_loop(addr, port)
