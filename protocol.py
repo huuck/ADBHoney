@@ -34,12 +34,12 @@ class AdbMessage(object):
 
     @property
     def header(self):
-	data_check = sum(ord(c) for c in self.data)
+        data_check = sum(ord(c) for c in self.data)
         #data_check = '\xbc\xb1\xa7\xb1'
-	#data_check = ''
-	#import zlib
-	#data_check = zlib.crc32(self.data)
-	magic = self.command ^ 0xffffffff
+        #data_check = ''
+        #import zlib
+        #data_check = zlib.crc32(self.data)
+        magic = self.command ^ 0xffffffff
         return AdbMessageHeader(self.command,
                                 self.arg0,
                                 self.arg1,
@@ -61,16 +61,16 @@ class AdbMessage(object):
 
     def validate(self, header):
         #assert self.header == header
-	assert True
+        assert True
 
     def __eq__(self, other):
         return self.header == other.header and self.data == other.data
 
     def __repr__(self):
-	#if len(self.data) > 32:
-	#	data = "*"
-	#else:
-	#	data = self.data
+        #if len(self.data) > 32:
+        #    data = "*"
+        #else:
+        #    data = self.data
         return "%s(%r)" % (self.header, self.data)
 
 
