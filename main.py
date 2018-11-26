@@ -23,10 +23,12 @@ def dump_file_data(addr, real_fname, data):
         os.makedirs(DL_FOLDER)
 
     fname = os.path.join(DL_FOLDER, "data-%s.raw" % hashlib.sha256(data).hexdigest())
+
+    print "%s\t%s\tfile:%s - dumping %s bytes of data to %s..." % (
+        int(time.time()), str(addr).ljust(24), real_fname, len(data), fname)
+    sys.stdout.flush()
+
     if not os.path.exists(fname):
-        print "%s\t%s\tfile:%s - dumping %s bytes of data to %s..." % (
-            int(time.time()), str(addr).ljust(24), real_fname, len(data), fname)
-        sys.stdout.flush()
         with open(fname, "wb") as f:
             f.write(data)
 
