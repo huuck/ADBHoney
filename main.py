@@ -350,7 +350,7 @@ if __name__ == '__main__':
     CONFIG['port'] = args.port
     CONFIG['download_dir'] = args.dlfolder
     CONFIG['logfile'] = args.logfile
-    CONFIG['json_log'] = args.jsonlog
+    #CONFIG['json_log'] = args.jsonlog
     CONFIG['sensor'] = args.sensor
     CONFIG['debug'] = args.debug
 
