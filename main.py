@@ -30,8 +30,6 @@ def log(message, CONFIG):
             print(message, file=f)
 
 def jsonlog(obj, CONFIG):
-    #json logging is a bit broken for now, commenting it out
-    return
     if CONFIG['json_log'] is not None:
         with open(CONFIG['json_log'], 'a') as f:
             print(json.dumps(obj), file=f)
@@ -340,7 +338,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', type=int, default=CONFIG['port'], help='Port to listen on (default: {})'.format(CONFIG['port']))
     parser.add_argument('-d', '--dlfolder', type=str, default='', help='Directory for the uploaded samples (default: current)')
     parser.add_argument('-l', '--logfile', type=str, default=None, help='Log file (default: stdout')
-    #parser.add_argument('-j', '--jsonlog', type=str, default=None, help='JSON log file')
+    parser.add_argument('-j', '--jsonlog', type=str, default=None, help='JSON log file')
     parser.add_argument('-s', '--sensor', type=str, default=CONFIG['sensor'], help='Sensor name (default: {})'.format(CONFIG['sensor']))
     parser.add_argument('--debug', action='store_true', help='Produce verbose output')
 
@@ -350,7 +348,7 @@ if __name__ == '__main__':
     CONFIG['port'] = args.port
     CONFIG['download_dir'] = args.dlfolder
     CONFIG['logfile'] = args.logfile
-    #CONFIG['json_log'] = args.jsonlog
+    CONFIG['json_log'] = args.jsonlog
     CONFIG['sensor'] = args.sensor
     CONFIG['debug'] = args.debug
 
