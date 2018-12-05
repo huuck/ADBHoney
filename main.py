@@ -72,6 +72,21 @@ def dump_file_data(addr, real_fname, data, session, CONFIG):
         with open(fullname, 'wb') as f:
             f.write(data)
 
+def log_shell_cmd(addr, message, session, CONFIG):
+    timestamp = getutctime()
+    log('{}\t{}\t{}'.format(timestamp, addr[0], message.data[:-1]), CONFIG)
+    event = {
+        'eventid': 'adbhoney.command.input',
+        'timestamp': timestamp,
+        'unixtime': int(time.time()),
+        'session': session,
+        'message': message.data[:-1],
+        'src_ip': addr[0],
+        'input': message.data[6:-1],
+        'sensor': CONFIG['sensor']
+    }
+    jsonlog(event, CONFIG)
+
 def send_message(conn, command, arg0, arg1, data, CONFIG):
     newmessage = protocol.AdbMessage(command, arg0, arg1, data)
     if CONFIG['debug']:
@@ -182,7 +197,7 @@ def process_connection(conn, addr, CONFIG):
             if 'DONE' in message.data:
                 dropped_file = dropped_file[:-8]
                 sending_binary = False
-                dump_file_data(addr, filename, dropped_file, session, CONFIG)
+                threading.Thread(target=dump_file_data, args=(addr, filename, dropped_file, session, CONFIG)).start()
                 # ADB has a shitty state machine, sometimes we need to send duplicate messages
                 send_twice(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
                 #send_message(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
@@ -213,7 +228,7 @@ def process_connection(conn, addr, CONFIG):
                     send_twice(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
                     send_twice(conn, protocol.CMD_OKAY, 2, message.arg0, '', CONFIG)
 
-                    dump_file_data(addr, filename, dropped_file, session, CONFIG)
+                    threading.Thread(target=dump_file_data, args=(addr, filename, dropped_file, session, CONFIG)).start()
                     continue
 
                 else:
@@ -246,18 +261,7 @@ def process_connection(conn, addr, CONFIG):
                 send_message(conn, protocol.CMD_CLSE, 2, message.arg0, '', CONFIG)
                 # print the shell command that was sent
                 # also remove trailing \00
-                log('{}\t{}\t{}'.format(getutctime(), addr[0], message.data[:-1]), CONFIG)
-                obj = {
-                    'eventid': 'adbhoney.command.input',
-                    'timestamp': getutctime(),
-                    'unixtime': int(time.time()),
-                    'session': session,
-                    'message': message.data[:-1],
-                    'src_ip': addr[0],
-                    'input': message.data[6:-1],
-                    'sensor': CONFIG['sensor']
-                }
-                jsonlog(obj, CONFIG)
+                threading.Thread(target=log_shell_cmd, args=(addr, message, session, CONFIG)).start()
             elif states[-1] == protocol.CMD_CNXN:
                 send_message(conn, protocol.CMD_CNXN, 0x01000000, 4096, DEVICE_ID, CONFIG)
             elif states[-1] == protocol.CMD_OPEN and 'sync' not in message.data:
