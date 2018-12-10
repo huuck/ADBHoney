@@ -86,12 +86,12 @@ def send_twice(conn, command, arg0, arg1, data, CONFIG):
 def process_logging(comm_q, config):
     while True:
         obj_to_log = comm_q.get(True)
-	if type(obj_to_log) is dict:
-		jsonlog(obj_to_log, config)
-	elif type(obj_to_log) is str:
-		log(obj_to_log, config)
-	elif type(obj_to_log) is tuple:
-		dump_file_data(*obj_to_log)
+        if type(obj_to_log) is dict:
+                jsonlog(obj_to_log, config)
+        elif type(obj_to_log) is str:
+                log(obj_to_log, config)
+        elif type(obj_to_log) is tuple:
+                dump_file_data(*obj_to_log)
 
 def process_connection(conn, addr, CONFIG, log_queue):
     start = time.time()
