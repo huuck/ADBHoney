@@ -13,6 +13,7 @@ import datetime
 import binascii
 import json
 from argparse import ArgumentParser
+from Queue import Queue
 
 __VERSION__ = '1.00'
 
@@ -75,18 +76,28 @@ def dump_file_data(addr, real_fname, data, session, CONFIG):
 def send_message(conn, command, arg0, arg1, data, CONFIG):
     newmessage = protocol.AdbMessage(command, arg0, arg1, data)
     if CONFIG['debug']:
-        log('>>>>{}'.format(newmessage), CONFIG)
+        print('>>>>{}'.format(newmessage))
     conn.sendall(newmessage.encode())
 
 def send_twice(conn, command, arg0, arg1, data, CONFIG):
     send_message(conn, command, arg0, arg1, data, CONFIG)
     send_message(conn, command, arg0, arg1, data, CONFIG)
 
-def process_connection(conn, addr, CONFIG):
+def process_logging(comm_q, config):
+    while True:
+        obj_to_log = comm_q.get(True)
+	if type(obj_to_log) is dict:
+		jsonlog(obj_to_log, config)
+	elif type(obj_to_log) is str:
+		log(obj_to_log, config)
+	elif type(obj_to_log) is tuple:
+		dump_file_data(*obj_to_log)
+
+def process_connection(conn, addr, CONFIG, log_queue):
     start = time.time()
     session = binascii.hexlify(os.urandom(6))
     localip = getlocalip()
-    log('{}\t{}\tconnection start ({})'.format(getutctime(), addr[0], session), CONFIG)
+    log_queue.put('{}\t{}\tconnection start ({})'.format(getutctime(), addr[0], session))
     obj = {
         'eventid': 'adbhoney.session.connect',
         'timestamp': getutctime(),
@@ -99,7 +110,7 @@ def process_connection(conn, addr, CONFIG):
         'dst_port': CONFIG['port'],
         'sensor': CONFIG['sensor']
     }
-    jsonlog(obj, CONFIG)
+    log_queue.put(obj)
     states = []
     sending_binary = False
     dropped_file = ''
@@ -148,7 +159,7 @@ def process_connection(conn, addr, CONFIG):
             data = command + arg1 + arg2 + data_length_raw + data_crc + magic + data_content
         except Exception as ex:
             closedmessage = 'Connection reset by peer'
-            log('{}\t{}\t {} : {}'.format(getutctime(), addr[0], repr(ex), repr(debug_content)), CONFIG)
+            log_queue.put('{}\t{}\t {} : {}'.format(getutctime(), addr[0], repr(ex), repr(debug_content)))
             break
 
         try:
@@ -157,9 +168,9 @@ def process_connection(conn, addr, CONFIG):
                 # print message
                 string = str(message)
                 if len(string) > 96:
-                    log('<<<<{} ...... {}'.format(string[0:64], string[-32:]), CONFIG)
+                    log_queue.put('<<<<{} ...... {}'.format(string[0:64], string[-32:]))
                 else:
-                    log('<<<<{}'.format(string), CONFIG)
+                    log_queue.put('<<<<{}'.format(string))
         except:
             # don't print anything, a lot of garbage coming in usually, just drop the connection
             break
@@ -182,7 +193,7 @@ def process_connection(conn, addr, CONFIG):
             if 'DONE' in message.data:
                 dropped_file = dropped_file[:-8]
                 sending_binary = False
-                dump_file_data(addr, filename, dropped_file, session, CONFIG)
+                log_queue.put((addr, filename, dropped_file, session, CONFIG))
                 # ADB has a shitty state machine, sometimes we need to send duplicate messages
                 send_twice(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
                 #send_message(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
@@ -213,7 +224,7 @@ def process_connection(conn, addr, CONFIG):
                     send_twice(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
                     send_twice(conn, protocol.CMD_OKAY, 2, message.arg0, '', CONFIG)
 
-                    dump_file_data(addr, filename, dropped_file, session, CONFIG)
+                    log_queue.put((addr, filename, dropped_file, session, CONFIG))
                     continue
 
                 else:
@@ -246,7 +257,7 @@ def process_connection(conn, addr, CONFIG):
                 send_message(conn, protocol.CMD_CLSE, 2, message.arg0, '', CONFIG)
                 # print the shell command that was sent
                 # also remove trailing \00
-                log('{}\t{}\t{}'.format(getutctime(), addr[0], message.data[:-1]), CONFIG)
+                log_queue.put('{}\t{}\t{}'.format(getutctime(), addr[0], message.data[:-1]))
                 obj = {
                     'eventid': 'adbhoney.command.input',
                     'timestamp': getutctime(),
@@ -257,7 +268,7 @@ def process_connection(conn, addr, CONFIG):
                     'input': message.data[6:-1],
                     'sensor': CONFIG['sensor']
                 }
-                jsonlog(obj, CONFIG)
+                log_queue.put(obj)
             elif states[-1] == protocol.CMD_CNXN:
                 send_message(conn, protocol.CMD_CNXN, 0x01000000, 4096, DEVICE_ID, CONFIG)
             elif states[-1] == protocol.CMD_OPEN and 'sync' not in message.data:
@@ -270,7 +281,7 @@ def process_connection(conn, addr, CONFIG):
                 send_message(conn, protocol.CMD_OKAY, 2, message.arg0, '', CONFIG)
                 send_message(conn, protocol.CMD_CLSE, 2, message.arg0, '', CONFIG)
     duration = time.time() - start
-    log('{}\t{}\tconnection closed ({})'.format(getutctime(), addr[0], session), CONFIG)
+    log_queue.put('{}\t{}\tconnection closed ({})'.format(getutctime(), addr[0], session))
     obj = {
         'eventid': 'adbhoney.session.closed',
         'timestamp': getutctime(),
@@ -281,7 +292,7 @@ def process_connection(conn, addr, CONFIG):
         'duration': duration,
         'sensor': CONFIG['sensor']
     }
-    jsonlog(obj, CONFIG)
+    log_queue.put(obj)
     conn.close()
 
 def main_coonection_loop(CONFIG):
@@ -312,9 +323,13 @@ def main_coonection_loop(CONFIG):
     try:
         while True:
             conn, addr = s.accept()
-            thread = threading.Thread(target=process_connection, args=(conn, addr, CONFIG))
+            log_queue = Queue()
+            thread = threading.Thread(target=process_connection, args=(conn, addr, CONFIG, log_queue))
             thread.daemon = True
             thread.start()
+            logging_thread = threading.Thread(target=process_logging, args=(log_queue, CONFIG))
+            logging_thread.daemon = True
+            logging_thread.start()
     except KeyboardInterrupt:
         log('Exiting...', CONFIG)
         s.close()
