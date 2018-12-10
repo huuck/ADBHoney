@@ -30,7 +30,9 @@ Just start the script in python:
 
 Just like that, shouldn't have any more complex dependencies.
 
-I'm working on this in my free time, so it's still a debugging build. You can remove the debug messages by hand or just do a `strings nohup.out | grep -v "<<<<" | grep -v ">>>>" | less` if you want to get some data right away.
+~~I'm working on this in my free time, so it's still a debugging build. You can remove the debug messages by hand or just do a `strings nohup.out | grep -v "<<<<" | grep -v ">>>>" | less` if you want to get some data right away.~~
+
+You can also play around with the various options from the command line.
 
 ## Credits
 Hat tip to [sporsh](https://github.com/sporsh) for his [awesome work](https://github.com/sporsh/twisted-adb/blob/master/adb/protocol.py) on providing the community with some wrappers for ADB messages.
