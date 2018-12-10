@@ -76,7 +76,7 @@ def dump_file_data(addr, real_fname, data, session, CONFIG):
 def send_message(conn, command, arg0, arg1, data, CONFIG):
     newmessage = protocol.AdbMessage(command, arg0, arg1, data)
     if CONFIG['debug']:
-        log_queue.put('>>>>{}'.format(newmessage))
+        print('>>>>{}'.format(newmessage))
     conn.sendall(newmessage.encode())
 
 def send_twice(conn, command, arg0, arg1, data, CONFIG):
