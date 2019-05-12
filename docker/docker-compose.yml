@@ -1,0 +1,10 @@
+version: '3.7'
+
+services:
+  honeypot:
+    build: .
+    container_name: adbhoney
+    ports:
+      - 5555:5555
+    volumes:
+      - ./adbhoney.cfg:/etc/adbhoney.cfg
