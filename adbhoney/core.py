@@ -335,11 +335,9 @@ class ADBConnection(threading.Thread):
 
 class ADBHoneyPot:
     def __init__(self):
-        self.bind_addr = '127.0.0.1'
-        self.bind_port = 5555
-        self.download_dir = 'dl/'
-        self.logfile = None
-        self.debug = False
+        self.bind_addr = CONFIG.get('honeypot', 'address')
+        self.bind_port = int(CONFIG.get('honeypot', 'port'))
+        self.download_dir = CONFIG.get('honeypot', 'download_dir')
         self.sensor = socket.gethostname()
 
     def accept_connections(self):
