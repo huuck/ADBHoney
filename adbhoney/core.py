@@ -1,12 +1,9 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function
 from argparse import ArgumentParser
 from datetime import datetime
-from responses import cmd_responses
 import threading
 import binascii
-import protocol
 import hashlib
 import logging
 import socket
@@ -15,6 +12,10 @@ import json
 import time
 import sys
 import os
+
+#package imports
+from .responses import cmd_responses
+from . import protocol
 
 __version__ = '1.00'
 
@@ -108,7 +109,7 @@ class ADBConnection(threading.Thread):
     def parse_data(self, data):
         try:
             message = protocol.AdbMessage.decode(data)[0]
-            #logger.info("decoded message {}".format(message))
+            logger.info("decoded message {}".format(message))
             string = str(message)
             if len(string) > 96:
                 logger.info('<<<<{} ...... {}'.format(string[0:64], string[-32:]))
@@ -122,6 +123,7 @@ class ADBConnection(threading.Thread):
         #return None
 
     def dump_file_data(self, filename, data):
+        logger.info("Dumping file data")
         print(type(data))
         shasum = hashlib.sha256(data.encode()).hexdigest()
         fname = 'data-{}.raw'.format(shasum)
@@ -253,7 +255,7 @@ class ADBConnection(threading.Thread):
         while True:
             try:
                 data = self.recv_data()
-                #logger.info("received data...")
+                logger.info("received data...")
             except EOFError:
                 break
             if not data:
@@ -261,8 +263,8 @@ class ADBConnection(threading.Thread):
                 break
                 #continue
             message = self.parse_data(data)
-            if type(message.data) == bytes:
-                message.data = message.data.decode()
+            #if type(message.data) == bytes:
+            #    message.data = message.data.decode()
             # keep a record of all the previous states in order to handle some weird cases
             states.append(message.command)
 
@@ -377,7 +379,7 @@ class ADBHoneyPot:
             logger.info('Exiting...')
             self.sock.close()
 
-if __name__ == '__main__':
+def main():
     # Eventually these will be filled from a config file
     CONFIG['addr'] = '127.0.0.1'
     CONFIG['port'] = 5555
@@ -409,3 +411,6 @@ if __name__ == '__main__':
 
     honeypot = ADBHoneyPot()
     honeypot.accept_connections()
+
+if __name__ == '__main__':
+    main()
