@@ -14,6 +14,7 @@ import sys
 import os
 
 #package imports
+from .config import CONFIG, OUTPUT_PLUGINS
 from .responses import cmd_responses
 from . import protocol
 
@@ -29,14 +30,11 @@ FORMAT = "%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 logger = logging.getLogger('ADBHoneypot')
 
-CONFIG = {}
-
 class ADBConnection(threading.Thread):
-    def __init__(self, conn, addr, CONFIG):
+    def __init__(self, conn, addr):
         threading.Thread.__init__(self)
         self.conn = conn
         self.addr = addr
-        self.CONFIG = CONFIG
         self.run()
 
     def run(self):
@@ -127,9 +125,10 @@ class ADBConnection(threading.Thread):
         print(type(data))
         shasum = hashlib.sha256(data.encode()).hexdigest()
         fname = 'data-{}.raw'.format(shasum)
-        if CONFIG['download_dir'] and not os.path.exists(CONFIG['download_dir']):
-            os.makedirs(CONFIG['download_dir'])
-        fullname = os.path.join(CONFIG['download_dir'], fname)
+        dl_dir = CONFIG.get('honeypot', 'download_dir')
+        if dl_dir and not os.path.exists(dl_dir):
+            os.makedirs(dl_dir)
+        fullname = os.path.join(dl_dir, fname)
         logger.info('file: {} - dumping {} bytes of data to {}'.format(filename, len(data), fullname))
 #        obj = {
 #            'eventid': 'adbhoney.session.file_upload',
@@ -371,7 +370,7 @@ class ADBHoneyPot:
             while True:
                 conn, addr = self.sock.accept()
                 logger.info("Received a connection, creating an ADBConnection.")
-                thread = threading.Thread(target=ADBConnection, args=(conn, addr, CONFIG))
+                thread = threading.Thread(target=ADBConnection, args=(conn, addr))
                 thread.daemon = True
                 logger.info("Starting ADBConnection")
                 thread.start()
@@ -381,33 +380,12 @@ class ADBHoneyPot:
 
 def main():
     # Eventually these will be filled from a config file
-    CONFIG['addr'] = '127.0.0.1'
-    CONFIG['port'] = 5555
-    CONFIG['download_dir'] = ''
-    CONFIG['logfile'] = None
-    CONFIG['json_log'] = None
-    CONFIG['sensor'] = socket.gethostname()
-    CONFIG['debug'] = False
-
     parser = ArgumentParser()
     parser.add_argument('-v', '--version', action='version', version="%(prog)s" + __version__)
-    parser.add_argument('-a', '--addr', type=str, default=CONFIG['addr'], help='Address to bind to (default: {})'.format(CONFIG['addr']))
-    parser.add_argument('-p', '--port', type=int, default=CONFIG['port'], help='Port to listen on (default: {})'.format(CONFIG['port']))
-    parser.add_argument('-d', '--dlfolder', type=str, default='', help='Directory for the uploaded samples (default: current)')
-    parser.add_argument('-l', '--logfile', type=str, default=None, help='Log file (default: stdout')
-    parser.add_argument('-j', '--jsonlog', type=str, default=None, help='JSON log file')
-    parser.add_argument('-s', '--sensor', type=str, default=CONFIG['sensor'], help='Sensor name (default: {})'.format(CONFIG['sensor']))
-    parser.add_argument('--debug', action='store_true', help='Produce verbose output')
 
     args = parser.parse_args()
-
-    CONFIG['addr'] = args.addr
-    CONFIG['port'] = args.port
-    CONFIG['download_dir'] = args.dlfolder
-    CONFIG['logfile'] = args.logfile
-    CONFIG['json_log'] = args.jsonlog
-    CONFIG['sensor'] = args.sensor
-    CONFIG['debug'] = args.debug
+    
+    logger.info("Configuration loaded with {} as output plugins".format(OUTPUT_PLUGINS))
 
     honeypot = ADBHoneyPot()
     honeypot.accept_connections()
