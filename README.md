@@ -29,6 +29,8 @@ Just start the script in python:
 
 Just like that, shouldn't have any more complex dependencies.
 
+**The config file `adbhoney.cfg` must be in the same directory as run.py or at /etc/adbhoney.cfg**
+
 Or give the docker container a try, easiest with docker-compose:
 
 `docker-compose up --build -d` 
@@ -36,7 +38,10 @@ Or give the docker container a try, easiest with docker-compose:
 or without docker compose
 
 `docker build -t adbhoney:latest .`
+
 `docker run --name adbhoney --rm -p 5555:5555 -v $(pwd)/adbhoney.cfg:/etc/adbhoney.cfg adbhoney:latest`
+
+You will probably want to save uploads and logs to the host machine, so add these volumes for those too by adding these to the run command above `-v $(pwd)/dl:/ADBHoney/dl -v $(pwd)/logs:/ADBHoney/logs`
 
 ## Credits
 Hat tip to [sporsh](https://github.com/sporsh) for his [awesome work](https://github.com/sporsh/twisted-adb/blob/master/adb/protocol.py) on providing the community with some wrappers for ADB messages.

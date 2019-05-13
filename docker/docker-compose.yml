@@ -7,4 +7,6 @@ services:
     ports:
       - 5555:5555
     volumes:
+      - ./logs:/ADBHoney/logs
+      - ./dl:/ADBHoney/dl
       - ./adbhoney.cfg:/etc/adbhoney.cfg
