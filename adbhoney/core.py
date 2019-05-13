@@ -17,6 +17,7 @@ import os
 from .config import CONFIG, OUTPUT_PLUGINS
 from .responses import cmd_responses
 from . import protocol
+from . import outputs
 
 __version__ = '1.00'
 
@@ -24,7 +25,6 @@ MAX_READ_COUNT = 4096 * 4096
 # sleep 1 second after each empty packets, wait 1 hour in total
 MAX_EMPTY_PACKETS = 360
 DEVICE_ID = 'device::http://ro.product.name =starltexx;ro.product.model=SM-G960F;ro.product.device=starlte;features=cmd,stat_v2,shell_v2'
-
 
 FORMAT = "%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
@@ -36,6 +36,13 @@ class ADBConnection(threading.Thread):
         self.conn = conn
         self.addr = addr
         self.run()
+
+    def report(self, obj):
+        obj['timestamp'] = time.time()
+        obj['host'] = CONFIG.get('honeypot', 'hostname')
+        for output in OUTPUT_PLUGINS:
+            output_writer = __import__('adbhoney.outputs.{}'.format(output), globals(), locals(), ['output']).Output()
+            output_writer.write(obj)
 
     def run(self):
         logger.debug("Processing new connection!")
@@ -122,26 +129,20 @@ class ADBConnection(threading.Thread):
 
     def dump_file_data(self, filename, data):
         logger.info("Dumping file data")
-        print(type(data))
+        #print(type(data))
         shasum = hashlib.sha256(data.encode()).hexdigest()
-        fname = 'data-{}.raw'.format(shasum)
+        fname = '{}.raw'.format(shasum)
         dl_dir = CONFIG.get('honeypot', 'download_dir')
         if dl_dir and not os.path.exists(dl_dir):
             os.makedirs(dl_dir)
         fullname = os.path.join(dl_dir, fname)
         logger.info('file: {} - dumping {} bytes of data to {}'.format(filename, len(data), fullname))
-#        obj = {
-#            'eventid': 'adbhoney.session.file_upload',
-#            'timestamp': getutctime(),
-#            'unixtime': int(time.time()),
-#            'session': session,
-#            'message': 'Downloaded file with SHA-256 {} to {}'.format(shasum, fullname),
-#            'src_ip': addr[0],
-#            'shasum': shasum,
-#            'outfile': fullname,
-#            'sensor': CONFIG['sensor']
-#        }
-#        jsonlog(obj, CONFIG)
+        obj = {
+            'eventid': 'adbhoney.session.file_upload',
+            'src_ip': self.addr[0],
+            'shasum': shasum,
+        }
+        self.report(obj)
         if not os.path.exists(fullname):
             with open(fullname, 'wb') as f:
                 f.write(data)
@@ -217,34 +218,26 @@ class ADBConnection(threading.Thread):
         # print the shell command that was sent
         # also remove trailing \00
         logger.info('{}\t{}'.format(self.addr[0], message.data[:-1]))
-#        obj = {
-#            'eventid': 'adbhoney.command.input',
-#            'timestamp': getutctime(),
-#            'unixtime': int(time.time()),
-#            'session': session,
-#            'message': message.data[:-1],
-#            'src_ip': addr[0],
-#            'input': message.data[6:-1],
-#            'sensor': CONFIG['sensor']
-#        }
+        obj = {
+            'eventid': 'adbhoney.session.command',
+            'command': cmd,
+            'src_ip': self.addr[0],
+        }
+        self.report(obj)
 
     def process_connection(self):
         start = time.time()
         self.session = binascii.hexlify(os.urandom(6))
         localip = socket.gethostbyname(socket.gethostname())
         logger.info('{} connection start ({})'.format(self.addr[0], self.session))
-#        obj = {
-#            'eventid': 'adbhoney.session.connect',
-#            'timestamp': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-#            'unixtime': int(start),
-#            'session': self.session,
-#            'message': 'New connection: {}:{} ({}:{}) [session: {}]'.format(addr[0], addr[1], localip, CONFIG['port'], session),
-#            'src_ip': addr[0],
-#            'src_port': addr[1],
-#            'dst_ip': localip,
-#            'dst_port': CONFIG['port'],
-#            'sensor': CONFIG['sensor']
-#        }
+        obj = {
+            'eventid': 'adbhoney.session.connect',
+            'src_ip': self.addr[0],
+            'src_port': self.addr[1],
+            'dst_ip': localip,
+            'dst_port': CONFIG.get('honeypot', 'port'),
+        }
+        self.report(obj)
 
         states = []
         self.sending_binary = False
@@ -321,16 +314,12 @@ class ADBConnection(threading.Thread):
                     #self.send_message(protocol.CMD_CLSE, 2, message.arg0, '')
         duration = time.time() - start
         logger.info('{}\t{}\tconnection closed'.format(duration, self.addr[0]))
-#        obj = {
-#            'eventid': 'adbhoney.session.closed',
-#            'timestamp': getutctime(),
-#            'unixtime': int(time.time()),
-#            'session': session,
-#            'message': '{} after {} seconds'.format(closedmessage, int(round(duration))),
-#            'src_ip': addr[0],
-#            'duration': duration,
-#            'sensor': CONFIG['sensor']
-#        }
+        obj = {
+            'eventid': 'adbhoney.session.closed',
+            'src_ip': self.addr[0],
+            'duration': duration,
+        }
+        self.report(obj)
         self.conn.close()
 
 class ADBHoneyPot:
@@ -338,7 +327,6 @@ class ADBHoneyPot:
         self.bind_addr = CONFIG.get('honeypot', 'address')
         self.bind_port = int(CONFIG.get('honeypot', 'port'))
         self.download_dir = CONFIG.get('honeypot', 'download_dir')
-        self.sensor = socket.gethostname()
 
     def accept_connections(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

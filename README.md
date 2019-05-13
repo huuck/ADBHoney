@@ -9,30 +9,34 @@ The Android Debug Bridge (ADB) is a protocol designed to keep track of both emul
 `adb shell <shell command>` - allows a developer to run all kinds of commands on the connected device such as ls, wget and many others.
 
 `adb push <local file> <remote destination>` - allows a developer to upload binaries from his own machine to the connected Android device.
+
 Coupled together, these two API calls can allow complete control over the device (legitimate or not) as long as the port is exposed over the Internet.
   
 The purpose of this project is to provide a low interaction honeypot designed to catch whatever malware is being pushed by attackers to unsuspecting victims which have port 5555 exposed.
 
 ## What works?
-Right now you can `adb connect`, `adb push` and `adb shell` into it. All of the data is redirected to stdout and files will be saved to disk. CPU/memory usage should be fairly low, any anormalities should be reported so I can look into them. There's a lot of black magic inside, so please be kind when logging an issue.
+Right now you can `adb connect`, `adb push` and `adb shell` into it. All of the data is redirected to stdout and files will be saved to disk. CPU/memory usage should be fairly low, any anormalities should be reported so they can be investigated.
+
+Responses to shell commands can easily be added by editing the `responses.py` file, currently only the `adb shell ls` will return a unique response. All other commands will respond with `command not found`
 
 ## What doesn't work?
-~~Latest ADB that I've managed to trick into connecting is **1.0.32** Can't get anything newer to connect. If you have any insight in this, feel free to submit a patch.~~
-
-Should be stable now, if it has any more problems poke me.
-
 More advanced commands (like native directory listing and having and interactive shell) won't work. The main reason is that I haven't found any kind of malware to take advantage of mechanisms like this. I've also had to reverse engineer the protocol flow by hand, so please also provide a **.pcap** when logging an issue so I can look into it (or VERY exact steps for reproduction). Any improvements will be more than welcome.
 
 # OK OK, how do I get it started?
 Just start the script in python:
 
-`nohup python main.py &`
+`nohup python run.py &`
 
 Just like that, shouldn't have any more complex dependencies.
 
-~~I'm working on this in my free time, so it's still a debugging build. You can remove the debug messages by hand or just do a `strings nohup.out | grep -v "<<<<" | grep -v ">>>>" | less` if you want to get some data right away.~~
+Or give the docker container a try, easiest with docker-compose:
 
-You can also play around with the various options from the command line.
+`docker-compose up --build -d` 
+
+or without docker compose
+
+`docker build -t adbhoney:latest .`
+`docker run --name adbhoney --rm -p 5555:5555 -v $(pwd)/adbhoney.cfg:/etc/adbhoney.cfg adbhoney:latest`
 
 ## Credits
 Hat tip to [sporsh](https://github.com/sporsh) for his [awesome work](https://github.com/sporsh/twisted-adb/blob/master/adb/protocol.py) on providing the community with some wrappers for ADB messages.
