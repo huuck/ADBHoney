@@ -27,8 +27,10 @@ MAX_EMPTY_PACKETS = 360
 DEVICE_ID = 'device::http://ro.product.name =starltexx;ro.product.model=SM-G960F;ro.product.device=starlte;features=cmd,stat_v2,shell_v2'
 
 FORMAT = "%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s"
-logging.basicConfig(level=logging.DEBUG, format=FORMAT)
+LEVEL = int(CONFIG.get('honeypot', 'log_level'))
+logging.basicConfig(format=FORMAT)
 logger = logging.getLogger('ADBHoneypot')
+logger.setLevel(level=LEVEL)
 
 class ADBConnection(threading.Thread):
     def __init__(self, conn, addr):
@@ -50,7 +52,7 @@ class ADBConnection(threading.Thread):
 
     def send_message(self, command, arg0, arg1, data):
         newmessage = protocol.AdbMessage(command, arg0, arg1, data)
-        logger.info('sending: {}'.format(newmessage))
+        logger.debug('sending: {}'.format(newmessage))
         self.conn.sendall(newmessage.encode())
 
     def send_twice(self, command, arg0, arg1, data):
@@ -69,20 +71,13 @@ class ADBConnection(threading.Thread):
                 # wait for more data
                 time.sleep(1)
                 return None
-            #logger.info("Received command {}".format(command))
             empty_packets = 0
             arg1 = self.conn.recv(4)
-            #logger.info("Received arg 1 {}".format(arg1))
             arg2 = self.conn.recv(4)
-            #logger.info("Received arg 2 {}".format(arg2))
             data_length_raw = self.conn.recv(4)
-            #logger.info("Received data_length_raw {}".format(data_length_raw))
             data_length = struct.unpack('<L', data_length_raw)[0]
-            #logger.info("unpacked data length {}".format(data_length))
             data_crc = self.conn.recv(4)
-            #logger.info("Received data_crc {}".format(data_crc))
             magic = self.conn.recv(4)
-            #logger.info("Received magic {}".format(magic))
 
             data_content = bytes()
 
@@ -98,7 +93,7 @@ class ADBConnection(threading.Thread):
                     data_content += self.conn.recv(bytes_to_read)
             # check integrity of read data
             if len(data_content) < data_length:
-                logger.error("data content length is greater than data_length, corrupt data!!")
+                logger.error("data content length is greater than data_length, corrupt data!")
                 # corrupt content, abort the self.connection (probably not an ADB client)
                 data = None
             else:
@@ -114,12 +109,12 @@ class ADBConnection(threading.Thread):
     def parse_data(self, data):
         try:
             message = protocol.AdbMessage.decode(data)[0]
-            logger.info("decoded message {}".format(message))
+            logger.debug("decoded message {}".format(message))
             string = str(message)
             if len(string) > 96:
-                logger.info('<<<<{} ...... {}'.format(string[0:64], string[-32:]))
+                logger.debug('<<<<{} ...... {}'.format(string[0:64], string[-32:]))
             else:
-                logger.info('<<<<{}'.format(string))
+                logger.debug('<<<<{}'.format(string))
             return message
         except Exception as e:
             logger.error(e)
@@ -127,86 +122,86 @@ class ADBConnection(threading.Thread):
             raise
         #return None
 
-    def dump_file_data(self, filename, data):
-        logger.info("Dumping file data")
-        #print(type(data))
-        shasum = hashlib.sha256(data).hexdigest()
-        fname = '{}.raw'.format(shasum)
+    def dump_file(self, f):
         dl_dir = CONFIG.get('honeypot', 'download_dir')
         if dl_dir and not os.path.exists(dl_dir):
             os.makedirs(dl_dir)
-        fullname = os.path.join(dl_dir, fname)
-        logger.info('file: {} - dumping {} bytes of data to {}'.format(filename, len(data), fullname))
+
+        shasum = hashlib.sha256(f['data']).hexdigest()
+        fn = '{}.raw'.format(shasum)
+        fp = os.path.join(dl_dir, fn)
+        logger.info('File uploaded: {}, name: {}, bytes: {}'.format(fp, f['name'], len(f['data'])))
         obj = {
             'eventid': 'adbhoney.session.file_upload',
             'src_ip': self.addr[0],
             'shasum': shasum,
-            'filename': filename
+            'filename': f['name']
         }
         self.report(obj)
-        if not os.path.exists(fullname):
-            with open(fullname, 'wb') as f:
-                f.write(data)
+        if not os.path.exists(fp):
+            with open(fp, 'wb') as file_out:
+                file_out.write(f['data'])
 
-    def recv_binary_chunk(self, message, data, dropped_file):
-        logger.info("Receiving binary chunk...")
-        filename = 'unknown'
+    def recv_binary_chunk(self, message, data, f):
+        logger.info("Received binary chunk of size: {}".format(len(message.data)))
         # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent
         # (i.e. DATA\x00\x00\x01\x00)
         if message.command == protocol.CMD_WRTE and 'DATA' in message.data:
             data_index = message.data.index('DATA')
             payload_fragment = message.data[:data_index] + message.data[data_index + 8:]
-            dropped_file += payload_fragment
+            f['data'] += payload_fragment
         elif message.command == protocol.CMD_WRTE:
-            dropped_file += message.data
+            f['data'] += message.data
 
         # truncate
         if 'DONE' in message.data:
-            dropped_file = dropped_file[:-8]
+            f['data'] = f['data'][:-8]
             self.sending_binary = False
-            self.dump_file_data(filename, dropped_file)
+            self.dump_file(f)
+
             # ADB has a shitty state machine, sometimes we need to send duplicate messages
             self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'OKAY')
-            #send_message(conn, protocol.CMD_WRTE, 2, message.arg0, 'OKAY', CONFIG)
-            self.send_twice(protocol.CMD_OKAY, 2, message.arg0, '')
-            #send_message(conn, protocol.CMD_OKAY, 2, message.arg0, '', CONFIG)
+            self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
         if message.command != protocol.CMD_WRTE:
-            dropped_file += data
+            f['data'] += data
 
-        #self.send_twice(protocol.CMD_OKAY, 2, message.arg0, '')
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
-        return dropped_file
+        return f
 
 
-    def recv_binary(self, message, dropped_file):
-        logger.info("Entering recv_binary")
+    def recv_binary(self, message, f):
+        logger.info("Receiving binary file...")
         self.sending_binary = True
         # if the message is really short, wrap it up
         if 'DONE' in message.data[-8:]:
             self.sending_binary = False
             predata = message.data.split('DATA')[0]
             if predata:
-                filename = predata.split(',')[0]
+                parts = predata.split(',')
+                filename = parts[0].split('\n\u0000\u0000\u0000')[1].strip()
+                f['name'] = filename
 
-            dropped_file = message.data.split('DATA')[1][4:-8]
+            f['data'] = message.data.split('DATA')[1][4:-8]
             self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'OKAY')
             self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
-            self.dump_file_data(filename, dropped_file)
+            self.dump_file(f)
         else:
             predata = message.data.split('DATA')[0]
             if predata:
-                filename = predata.split(',')[0]
-            dropped_file = message.data.split('DATA')[1][4:]
+                parts = predata.split(',')
+                filename = parts[0].split('\n\x00\x00\x00')[1]
+                f['name'] = filename
+            f['data'] = message.data.split('DATA')[1][4:]
 
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
-        return dropped_file
+        return f
 
     def recv_shell_cmd(self, message):
-        logger.info("Entering recv_shell_cmd")
+        logger.debug("Entering recv_shell_cmd")
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
         cmd = message.data.split(':')[1][:-1]
@@ -245,35 +240,33 @@ class ADBConnection(threading.Thread):
 
         states = []
         self.sending_binary = False
-        dropped_file = ''
+        f = {'name': '', 'data': ''}
         filename = 'unknown'
         closedmessage = 'Connection closed'
         while True:
             try:
                 data = self.recv_data()
-                logger.info("received data...")
+                logger.debug("Received data of length: {}".format(len(data)))
             except EOFError:
                 break
+
             if not data:
                 logger.info("data is none?: {}".format(data))
                 break
                 #continue
             message = self.parse_data(data)
-            #if type(message.data) == bytes:
-            #    message.data = message.data.decode()
+
             # keep a record of all the previous states in order to handle some weird cases
             states.append(message.command)
-
-            # corner case for binary sending
+            
+            #Continue receiving binary
             if self.sending_binary:
-                logger.info("corner case?? just large binary")
-                dropped_file = self.recv_binary_chunk(message, data, dropped_file)
+                f = self.recv_binary_chunk(message, data, f)
                 continue
             # look for the data header that is first sent when initiating a data connection
             #  /sdcard/stuff/exfiltrator-network-io.PNG,33206DATA
             elif 'DATA' in message.data[:128]:
-                logger.info("receiving binary....")
-                dropped_file = self.recv_binary(message, dropped_file)
+                f = self.recv_binary(message, f)
                 continue
             else:   # regular flow
                 if len(states) >= 2 and states[-2:] == [protocol.CMD_WRTE, protocol.CMD_WRTE]:
@@ -362,7 +355,6 @@ class ADBHoneyPot:
                 logger.info("Received a connection, creating an ADBConnection.")
                 thread = threading.Thread(target=ADBConnection, args=(conn, addr))
                 thread.daemon = True
-                logger.info("Starting ADBConnection")
                 thread.start()
         except KeyboardInterrupt:
             logger.info('Exiting...')
