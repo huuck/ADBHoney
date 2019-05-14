@@ -130,7 +130,7 @@ class ADBConnection(threading.Thread):
     def dump_file_data(self, filename, data):
         logger.info("Dumping file data")
         #print(type(data))
-        shasum = hashlib.sha256(data.encode()).hexdigest()
+        shasum = hashlib.sha256(data).hexdigest()
         fname = '{}.raw'.format(shasum)
         dl_dir = CONFIG.get('honeypot', 'download_dir')
         if dl_dir and not os.path.exists(dl_dir):
@@ -141,14 +141,15 @@ class ADBConnection(threading.Thread):
             'eventid': 'adbhoney.session.file_upload',
             'src_ip': self.addr[0],
             'shasum': shasum,
+            'filename': filename
         }
         self.report(obj)
         if not os.path.exists(fullname):
             with open(fullname, 'wb') as f:
                 f.write(data)
 
-    def binary_send_corner_case(self, message, data, dropped_file):
-        logger.info("Entering binary_send_corner_case")
+    def recv_binary_chunk(self, message, data, dropped_file):
+        logger.info("Receiving binary chunk...")
         filename = 'unknown'
         # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent
         # (i.e. DATA\x00\x00\x01\x00)
@@ -173,9 +174,10 @@ class ADBConnection(threading.Thread):
         if message.command != protocol.CMD_WRTE:
             dropped_file += data
 
-        self.send_twice(protocol.CMD_OKAY, 2, message.arg0, '')
+        #self.send_twice(protocol.CMD_OKAY, 2, message.arg0, '')
+        self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
+
         return dropped_file
-        #send_message(conn, protocol.CMD_OKAY, 2, message.arg0, '', CONFIG)
 
 
     def recv_binary(self, message, dropped_file):
@@ -198,8 +200,10 @@ class ADBConnection(threading.Thread):
             if predata:
                 filename = predata.split(',')[0]
             dropped_file = message.data.split('DATA')[1][4:]
-        logger.info("last line in recv_binary")
-        #self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
+
+        self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
+
+        return dropped_file
 
     def recv_shell_cmd(self, message):
         logger.info("Entering recv_shell_cmd")
@@ -263,13 +267,13 @@ class ADBConnection(threading.Thread):
             # corner case for binary sending
             if self.sending_binary:
                 logger.info("corner case?? just large binary")
-                dropped_file = self.binary_send_corner_case(message, data, dropped_file)
+                dropped_file = self.recv_binary_chunk(message, data, dropped_file)
                 continue
             # look for the data header that is first sent when initiating a data connection
             #  /sdcard/stuff/exfiltrator-network-io.PNG,33206DATA
             elif 'DATA' in message.data[:128]:
                 logger.info("receiving binary....")
-                self.recv_binary(message, dropped_file)
+                dropped_file = self.recv_binary(message, dropped_file)
                 continue
             else:   # regular flow
                 if len(states) >= 2 and states[-2:] == [protocol.CMD_WRTE, protocol.CMD_WRTE]:
