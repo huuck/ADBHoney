@@ -26,19 +26,30 @@ MAX_READ_COUNT = 4096 * 4096
 MAX_EMPTY_PACKETS = 360
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
-LEVEL = int(CONFIG.get('honeypot', 'log_level'))
-LOG_DIR = CONFIG.get('honeypot', 'log_dir')
-FORMAT = '%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s'
 
-formatter = logging.Formatter(FORMAT)
-logging.basicConfig(format=FORMAT)
-logger = logging.getLogger('ADBHoneypot')
-logger.setLevel(LEVEL)
+def get_logger():
+    LOG_DIR = CONFIG.get('honeypot', 'log_dir')
+    LOG_LEVEL = int(CONFIG.get('honeypot', 'log_level'))
+    LOG_FILE = '{}/{}'.format(LOG_DIR, 'adbhoney.log')
+    FORMAT = '%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s'
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(LOG_FILE):
+        open(LOG_FILE, 'w').close()
 
-file_handler = logging.FileHandler("{}/{}.log".format(LOG_DIR, 'adbhoney'))
-file_handler.setFormatter(formatter)
-file_handler.setLevel(LEVEL)
-logger.addHandler(file_handler)
+    formatter = logging.Formatter(FORMAT)
+    logging.basicConfig(format=FORMAT)
+    logger = logging.getLogger('ADBHoneypot')
+    logger.setLevel(LOG_LEVEL)
+
+    file_handler = logging.FileHandler(LOG_FILE)
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(LOG_LEVEL)
+    logger.addHandler(file_handler)
+
+    return logger
+
+logger = get_logger()
 
 class ADBConnection(threading.Thread):
     def __init__(self, conn, addr):
