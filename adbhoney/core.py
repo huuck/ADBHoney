@@ -27,29 +27,27 @@ MAX_EMPTY_PACKETS = 360
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
 
-def get_logger():
+def get_logger(log_file):
     LOG_DIR = CONFIG.get('honeypot', 'log_dir')
     LOG_LEVEL = int(CONFIG.get('honeypot', 'log_level'))
-    LOG_FILE = '{}/{}'.format(LOG_DIR, 'adbhoney.log')
+    LOG_PATH = '{}/{}'.format(LOG_DIR, log_file)
     FORMAT = '%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s'
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
-    if not os.path.exists(LOG_FILE):
-        open(LOG_FILE, 'w').close()
+    if not os.path.exists(LOG_PATH):
+        open(LOG_PATH, 'w').close()
 
     formatter = logging.Formatter(FORMAT)
     logging.basicConfig(format=FORMAT)
     logger = logging.getLogger('ADBHoneypot')
     logger.setLevel(LOG_LEVEL)
 
-    file_handler = logging.FileHandler(LOG_FILE)
+    file_handler = logging.FileHandler(LOG_PATH)
     file_handler.setFormatter(formatter)
     file_handler.setLevel(LOG_LEVEL)
     logger.addHandler(file_handler)
 
     return logger
-
-logger = get_logger()
 
 class ADBConnection(threading.Thread):
     def __init__(self, conn, addr):
@@ -140,13 +138,13 @@ class ADBConnection(threading.Thread):
         #return None
 
     def dump_file(self, f):
-        dl_dir = CONFIG.get('honeypot', 'download_dir')
-        if dl_dir and not os.path.exists(dl_dir):
-            os.makedirs(dl_dir)
+        DL_DIR = CONFIG.get('honeypot', 'download_dir')
+        if DL_DIR and not os.path.exists(DL_DIR):
+            os.makedirs(DL_DIR)
 
         shasum = hashlib.sha256(f['data']).hexdigest()
         fn = '{}.raw'.format(shasum)
-        fp = os.path.join(dl_dir, fn)
+        fp = os.path.join(DL_DIR, fn)
         logger.info('File uploaded: {}, name: {}, bytes: {}'.format(fp, f['name'], len(f['data'])))
         obj = {
             'eventid': 'adbhoney.session.file_upload',
@@ -372,11 +370,35 @@ class ADBHoneyPot:
             self.sock.close()
 
 def main():
+    global logger
     # Eventually these will be filled from a config file
     parser = ArgumentParser()
+
     parser.add_argument('-v', '--version', action='version', version="%(prog)s" + __version__)
+    parser.add_argument('-a', '--addr', type=str, default=None, help='Address to bind to')
+    parser.add_argument('-p', '--port', type=int, default=None, help='Port to listen on')
+    parser.add_argument('-d', '--dlfolder', type=str, default=None, help='Directory for the uploaded samples (default: current)')
+    parser.add_argument('-l', '--logfile', type=str, default=None, help='Log file (default: adbhoney.log')
+    parser.add_argument('-j', '--jsonlog', type=str, default=None, help='JSON log file')
+    parser.add_argument('-s', '--sensor', type=str, default=None, help='Sensor/Host name')
 
     args = parser.parse_args()
+
+    if args.addr:
+        CONFIG.set('honeypot', 'address', args.addr)
+    if args.port:
+        CONFIG.set('honeypot', 'port', str(args.port))
+    if args.dlfolder:
+        CONFIG.set('honeypot', 'download_dir', str(args.port))
+    if args.logfile:
+        CONFIG.set('honeypot', 'log_file', args.logfile)
+    if args.jsonlog:
+        CONFIG.set('output_json', 'log_file', args.jsonlog)
+    if args.sensor:
+        CONFIG.set('honeypot', 'hostname', args.sensor)
+
+    log_file = CONFIG.get('honeypot', 'log_file')
+    logger = get_logger(log_file)
     
     logger.info("Configuration loaded with {} as output plugins".format(OUTPUT_PLUGINS))
 
