@@ -24,13 +24,21 @@ __version__ = '1.00'
 MAX_READ_COUNT = 4096 * 4096
 # sleep 1 second after each empty packets, wait 1 hour in total
 MAX_EMPTY_PACKETS = 360
-DEVICE_ID = 'device::http://ro.product.name =starltexx;ro.product.model=SM-G960F;ro.product.device=starlte;features=cmd,stat_v2,shell_v2'
 
-FORMAT = "%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s"
+DEVICE_ID = CONFIG.get('honeypot', 'device_id')
 LEVEL = int(CONFIG.get('honeypot', 'log_level'))
+LOG_DIR = CONFIG.get('honeypot', 'log_dir')
+FORMAT = '%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s'
+
+formatter = logging.Formatter(FORMAT)
 logging.basicConfig(format=FORMAT)
 logger = logging.getLogger('ADBHoneypot')
-logger.setLevel(level=LEVEL)
+logger.setLevel(LEVEL)
+
+file_handler = logging.FileHandler("{}/{}.log".format(LOG_DIR, 'adbhoney'))
+file_handler.setFormatter(formatter)
+file_handler.setLevel(LEVEL)
+logger.addHandler(file_handler)
 
 class ADBConnection(threading.Thread):
     def __init__(self, conn, addr):
@@ -102,8 +110,6 @@ class ADBConnection(threading.Thread):
         except Exception as e:
             logger.info("Connection reset by peer.")
             raise EOFError
-            #logger.error("{} : {}".format(self.addr[0], e))
-            #raise
         return data
     
     def parse_data(self, data):
@@ -174,26 +180,20 @@ class ADBConnection(threading.Thread):
     def recv_binary(self, message, f):
         logger.info("Receiving binary file...")
         self.sending_binary = True
+        predata = message.data.split('DATA')[0]
+        if predata:
+            parts = predata.split(',')
+            filename = parts[0].split('\x00\x00\x00')[1]
+            f['name'] = filename
+
         # if the message is really short, wrap it up
         if 'DONE' in message.data[-8:]:
             self.sending_binary = False
-            predata = message.data.split('DATA')[0]
-            if predata:
-                parts = predata.split(',')
-                filename = parts[0].split('\n\u0000\u0000\u0000')[1].strip()
-                f['name'] = filename
-
             f['data'] = message.data.split('DATA')[1][4:-8]
             self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'OKAY')
             self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
-
             self.dump_file(f)
         else:
-            predata = message.data.split('DATA')[0]
-            if predata:
-                parts = predata.split(',')
-                filename = parts[0].split('\n\x00\x00\x00')[1]
-                f['name'] = filename
             f['data'] = message.data.split('DATA')[1][4:]
 
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
