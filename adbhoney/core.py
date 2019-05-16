@@ -27,10 +27,11 @@ MAX_EMPTY_PACKETS = 360
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
 
-def get_logger(log_file):
+def get_logger():
+    LOG_FILE = CONFIG.get('honeypot', 'log_file')
     LOG_DIR = CONFIG.get('honeypot', 'log_dir')
     LOG_LEVEL = int(CONFIG.get('honeypot', 'log_level'))
-    LOG_PATH = '{}/{}'.format(LOG_DIR, log_file)
+    LOG_PATH = '{}/{}'.format(LOG_DIR, LOG_FILE)
     FORMAT = '%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s'
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
@@ -153,6 +154,7 @@ class ADBConnection(threading.Thread):
             'filename': f['name']
         }
         self.report(obj)
+        #Don't overwrite the file if it already exists
         if not os.path.exists(fp):
             with open(fp, 'wb') as file_out:
                 file_out.write(f['data'])
@@ -213,7 +215,7 @@ class ADBConnection(threading.Thread):
         logger.debug("Entering recv_shell_cmd")
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
-        cmd = message.data.split(':')[1][:-1]
+        cmd = message.data[6:]
         # change the WRTE contents with whatever you'd like to send to the attacker
         logger.info("shell command is {}, len {}".format(cmd, len(cmd)))
         if cmd in cmd_responses:
@@ -397,8 +399,7 @@ def main():
     if args.sensor:
         CONFIG.set('honeypot', 'hostname', args.sensor)
 
-    log_file = CONFIG.get('honeypot', 'log_file')
-    logger = get_logger(log_file)
+    logger = get_logger()
     
     logger.info("Configuration loaded with {} as output plugins".format(OUTPUT_PLUGINS))
 
