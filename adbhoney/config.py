@@ -41,8 +41,6 @@ def get_config():
 
     logger.info("Loading config from {}".format(cfg_file))
     config = read_config(cfg_file)
-    level = log_levels[config.get('honeypot', 'log_level')]
-    config.set('honeypot', 'log_level', str(level))
 
     return config
 

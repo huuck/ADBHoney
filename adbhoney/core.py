@@ -29,28 +29,27 @@ MAX_EMPTY_PACKETS = 360
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
 log_q = Queue.Queue()
 
-def get_logger():
-    LOG_FILE = CONFIG.get('honeypot', 'log_file')
-    LOG_DIR = CONFIG.get('honeypot', 'log_dir')
-    LOG_LEVEL = int(CONFIG.get('honeypot', 'log_level'))
-    LOG_PATH = '{}/{}'.format(LOG_DIR, LOG_FILE)
-    FORMAT = '%(asctime)s - %(thread)s - %(name)s - %(levelname)s - %(message)s'
-    if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
-    if not os.path.exists(LOG_PATH):
-        open(LOG_PATH, 'w').close()
+class OutputLogger():
+    def __init__(self, log_q):
+        self.log_q = log_q
+        self.debug('OutputLogger init!')
 
-    formatter = logging.Formatter(FORMAT)
-    logging.basicConfig(format=FORMAT)
-    logger = logging.getLogger('ADBHoneypot')
-    logger.setLevel(LOG_LEVEL)
+    def debug(self, message):
+        level = logging.DEBUG
+        self.log_q.put((message, level))
 
-    file_handler = logging.FileHandler(LOG_PATH)
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(LOG_LEVEL)
-    logger.addHandler(file_handler)
+    def info(self, message):
+        level = logging.INFO
+        self.log_q.put((message, level))
+    
+    def error(self, message):
+        level = logging.ERROR
+        self.log_q.put((message, level))
 
-    return logger
+    def write(self, message):
+        self.log_q.put(message)
+
+logger = OutputLogger(log_q)
 
 class OutputWriter(threading.Thread):
     def __init__(self):
@@ -70,8 +69,10 @@ class OutputWriter(threading.Thread):
                 log = log_q.get(timeout=.1)
             except Queue.Empty:
                 continue
-            logger.debug("Pulled {} from log_q".format(log))
-            self.write(log)
+            if type(log) is tuple:
+                self.log(*log)
+            else:
+                self.write(log)
             log_q.task_done()
 
     def stop(self):
@@ -80,6 +81,11 @@ class OutputWriter(threading.Thread):
     def write(self, log):
         for writer in self.output_writers:
             writer.write(log)
+    
+    def log(self, log, level):
+        first_logger = self.output_writers[0]
+        if first_logger.__name__ == 'output_log':
+            first_logger.write(log, level)
 
 class ADBConnection(threading.Thread):
     def __init__(self, conn, addr):
@@ -94,7 +100,7 @@ class ADBConnection(threading.Thread):
         obj['session'] = self.session
         obj['sensor'] = CONFIG.get('honeypot', 'hostname')
         logger.debug("Placing {} on log_q".format(obj))
-        log_q.put(obj)
+        logger.write(obj)
 
     def run(self):
         logger.debug("Processing new connection!")
@@ -438,7 +444,6 @@ def main():
     if args.sensor:
         CONFIG.set('honeypot', 'hostname', args.sensor)
 
-    logger = get_logger()
     output_writer = OutputWriter()
     output_writer.start()
     
