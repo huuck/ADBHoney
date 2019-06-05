@@ -233,8 +233,16 @@ class ADBConnection(threading.Thread):
         predata = message.data.split('DATA')[0]
         if predata:
             parts = predata.split(',')
-            filename = parts[0].split('\x00\x00\x00')[1]
-            f['name'] = filename
+            prefix = '\x00\x00\x00'
+            if prefix in parts[0]:
+                name_parts = parts[0].split(prefix)
+                if len(name_parts) == 1:
+                    f['name'] = name_parts[0]
+                else:
+                    f['name'] = name_parts[1]
+            else:
+                f['name'] = parts[0]
+            #filename = parts[0].split('\x00\x00\x00')[1]
 
         # if the message is really short, wrap it up
         if 'DONE' in message.data[-8:]:
