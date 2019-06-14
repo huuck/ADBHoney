@@ -269,7 +269,7 @@ class ADBConnection(threading.Thread):
         if cmd in cmd_responses:
             response = cmd_responses[cmd]
         else:
-            response = "{}: command not found\n".format(cmd)
+            response = ""
 
         # change the WRTE contents with whatever you'd like to send to the attacker
         self.send_message(protocol.CMD_WRTE, 2, message.arg0, response)
