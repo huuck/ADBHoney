@@ -1,0 +1,12 @@
+version: '3.4'
+
+services:
+  honeypot:
+    build: .
+    container_name: adbhoney
+    ports:
+      - 5555:5555
+    volumes:
+      - ./logs:/ADBHoney/logs
+      - ./dl:/ADBHoney/dl
+      - ./adbhoney.cfg:/etc/adbhoney.cfg
