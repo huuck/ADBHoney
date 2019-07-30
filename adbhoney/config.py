@@ -1,4 +1,4 @@
-import ConfigParser
+import configparser
 import logging
 import sys
 import os
@@ -14,7 +14,7 @@ log_levels = {
         }
 
 def read_config(cfg_file):
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.readfp(open(cfg_file))
     return config
 
