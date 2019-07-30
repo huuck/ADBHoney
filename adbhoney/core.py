@@ -8,7 +8,7 @@ import hashlib
 import logging
 import socket
 import struct
-import Queue
+import queue
 import json
 import time
 import sys
@@ -27,7 +27,7 @@ MAX_READ_COUNT = 4096 * 4096
 MAX_EMPTY_PACKETS = 360
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
-log_q = Queue.Queue()
+log_q = queue.Queue()
 
 class OutputLogger():
     def __init__(self, log_q):
@@ -67,7 +67,7 @@ class OutputWriter(threading.Thread):
         while not log_q.empty() or self.process:
             try:
                 log = log_q.get(timeout=.1)
-            except Queue.Empty:
+            except queue.Empty:
                 continue
             if type(log) is tuple:
                 self.log(*log)
