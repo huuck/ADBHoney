@@ -36,11 +36,7 @@ class AdbMessage(object):
 
     @property
     def header(self):
-        data_check = sum(ord(c) for c in self.data)
-        #data_check = '\xbc\xb1\xa7\xb1'
-        #data_check = ''
-        #import zlib
-        #data_check = zlib.crc32(self.data)
+        data_check = sum(ord(c) for c in str(self.data))
         magic = self.command ^ 0xffffffff
         return AdbMessageHeader(self.command,
                                 self.arg0,
@@ -59,7 +55,7 @@ class AdbMessage(object):
         return message, data[header.data_length:]
 
     def encode(self):
-        return self.header.encode() + self.data
+        return self.header.encode() + bytearray(self.data,'utf-8')
 
     def validate(self, header):
         #assert self.header == header
