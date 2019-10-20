@@ -1,4 +1,4 @@
-FROM python:2.7-alpine3.9
+FROM python:3.6-alpine3.9
 
 RUN apk update && apk add git
 

@@ -8,7 +8,7 @@ import hashlib
 import logging
 import socket
 import struct
-import Queue
+import queue as Queue
 import json
 import time
 import sys
@@ -230,10 +230,10 @@ class ADBConnection(threading.Thread):
     def recv_binary(self, message, f):
         logger.info("Receiving binary file...")
         self.sending_binary = True
-        predata = message.data.split('DATA')[0]
+        predata = message.data.split(bytes('DATA', "utf-8"))[0]
         if predata:
-            parts = predata.split(',')
-            prefix = '\x00\x00\x00'
+            parts = predata.split(bytes(',', "utf-8"))
+            prefix = bytes('\x00\x00\x00', "utf-8")
             if prefix in parts[0]:
                 name_parts = parts[0].split(prefix)
                 if len(name_parts) == 1:
@@ -245,9 +245,9 @@ class ADBConnection(threading.Thread):
             #filename = parts[0].split('\x00\x00\x00')[1]
 
         # if the message is really short, wrap it up
-        if 'DONE' in message.data[-8:]:
+        if bytes('DONE', "utf-8") in message.data[-8:]:
             self.sending_binary = False
-            f['data'] = message.data.split('DATA')[1][4:-8]
+            f['data'] = message.data.split(bytes('DATA', "utf-8"))[1][4:-8]
             self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'OKAY')
             self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
             self.dump_file(f)
@@ -325,7 +325,7 @@ class ADBConnection(threading.Thread):
                 continue
             # look for the data header that is first sent when initiating a data connection
             #  /sdcard/stuff/exfiltrator-network-io.PNG,33206DATA
-            elif 'DATA' in message.data[:128]:
+            elif bytes('DATA', "utf-8") in message.data[:128]:
                 f = self.recv_binary(message, f)
                 continue
             else:   # regular flow
@@ -336,7 +336,7 @@ class ADBConnection(threading.Thread):
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     # why do I have to send the command twice??? science damn it!
                     self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x07\x00\x00\x00')
-                elif states[-1] == protocol.CMD_WRTE and 'QUIT' in message.data:
+                elif states[-1] == protocol.CMD_WRTE and bytes('QUIT', "utf-8") in message.data:
                     logger.debug("Received quit command.")
                     #self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     self.send_message(protocol.CMD_CLSE, 2, message.arg0, '')
@@ -354,13 +354,13 @@ class ADBConnection(threading.Thread):
                     if len(message.data) > 8:
                         self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x01\x00\x00\x00')
                         filename = message.data[8:]
-                elif states[-1] == protocol.CMD_OPEN and 'shell' in message.data:
+                elif states[-1] == protocol.CMD_OPEN and bytes('shell', "utf-8") in message.data:
                     logger.debug("Received shell command.")
                     self.recv_shell_cmd(message)
                 elif states[-1] == protocol.CMD_CNXN:
                     logger.debug("Received connection command.")
                     self.send_message(protocol.CMD_CNXN, 0x01000000, 4096, DEVICE_ID)
-                elif states[-1] == protocol.CMD_OPEN and 'sync' not in message.data:
+                elif states[-1] == protocol.CMD_OPEN and bytes('sync', "utf-8") not in message.data:
                     logger.debug("Received sync command.")
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                 elif states[-1] == protocol.CMD_OPEN:

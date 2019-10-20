@@ -14,6 +14,6 @@ class Output(object):
         if not os.path.exists(self.base):
             os.makedirs(self.base)
         with open(self.fp, 'a') as f:
-            json.dump(jsonlog, f)
+            json.dump(str(jsonlog), f)
             f.write('\n')
             f.flush()

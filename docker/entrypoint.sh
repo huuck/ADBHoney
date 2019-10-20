@@ -1,3 +1,3 @@
 #!/bin/sh
 
-python run.py
+python3.6 run.py
