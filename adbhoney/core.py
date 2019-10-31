@@ -199,18 +199,21 @@ class ADBConnection(threading.Thread):
                 file_out.write(f['data'])
 
     def recv_binary_chunk(self, message, data, f):
+        if len(message.data) == 0:
+            self.sending_binary = False
+            return
         logger.info("Received binary chunk of size: {}".format(len(message.data)))
         # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent
         # (i.e. DATA\x00\x00\x01\x00)
-        if message.command == protocol.CMD_WRTE and 'DATA' in message.data:
-            data_index = message.data.index('DATA')
+        if message.command == protocol.CMD_WRTE and bytes('DATA', "utf-8") in message.data:
+            data_index = message.data.index(bytes('DATA', "utf-8"))
             payload_fragment = message.data[:data_index] + message.data[data_index + 8:]
             f['data'] += payload_fragment
         elif message.command == protocol.CMD_WRTE:
             f['data'] += message.data
 
         # truncate
-        if 'DONE' in message.data:
+        if bytes('DONE', "utf-8") in message.data:
             f['data'] = f['data'][:-8]
             self.sending_binary = False
             self.dump_file(f)
@@ -252,7 +255,7 @@ class ADBConnection(threading.Thread):
             self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
             self.dump_file(f)
         else:
-            f['data'] = message.data.split('DATA')[1][4:]
+            f['data'] = message.data.split(bytes('DATA', "utf-8"))[1][4:]
 
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
