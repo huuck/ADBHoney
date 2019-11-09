@@ -202,7 +202,7 @@ class ADBConnection(threading.Thread):
         if len(message.data) == 0:
             self.sending_binary = False
             return
-        logger.info("Received binary chunk of size: {}".format(len(message.data)))
+        logger.debug("Received binary chunk of size: {}".format(len(message.data)))
         # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent
         # (i.e. DATA\x00\x00\x01\x00)
         if message.command == protocol.CMD_WRTE and bytes('DATA', "utf-8") in message.data:
