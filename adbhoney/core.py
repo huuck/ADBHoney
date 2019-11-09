@@ -8,7 +8,7 @@ import hashlib
 import logging
 import socket
 import struct
-import Queue
+import queue as Queue
 import json
 import time
 import sys
@@ -199,18 +199,21 @@ class ADBConnection(threading.Thread):
                 file_out.write(f['data'])
 
     def recv_binary_chunk(self, message, data, f):
+        if len(message.data) == 0:
+            self.sending_binary = False
+            return
         logger.info("Received binary chunk of size: {}".format(len(message.data)))
         # look for that shitty DATAXXXX where XXXX is the length of the data block that's about to be sent
         # (i.e. DATA\x00\x00\x01\x00)
-        if message.command == protocol.CMD_WRTE and 'DATA' in message.data:
-            data_index = message.data.index('DATA')
+        if message.command == protocol.CMD_WRTE and bytes('DATA', "utf-8") in message.data:
+            data_index = message.data.index(bytes('DATA', "utf-8"))
             payload_fragment = message.data[:data_index] + message.data[data_index + 8:]
             f['data'] += payload_fragment
         elif message.command == protocol.CMD_WRTE:
             f['data'] += message.data
 
         # truncate
-        if 'DONE' in message.data:
+        if bytes('DONE', "utf-8") in message.data:
             f['data'] = f['data'][:-8]
             self.sending_binary = False
             self.dump_file(f)
@@ -230,10 +233,10 @@ class ADBConnection(threading.Thread):
     def recv_binary(self, message, f):
         logger.info("Receiving binary file...")
         self.sending_binary = True
-        predata = message.data.split('DATA')[0]
+        predata = message.data.split(bytes('DATA', "utf-8"))[0]
         if predata:
-            parts = predata.split(',')
-            prefix = '\x00\x00\x00'
+            parts = predata.split(bytes(',', "utf-8"))
+            prefix = bytes('\x00\x00\x00', "utf-8")
             if prefix in parts[0]:
                 name_parts = parts[0].split(prefix)
                 if len(name_parts) == 1:
@@ -245,14 +248,14 @@ class ADBConnection(threading.Thread):
             #filename = parts[0].split('\x00\x00\x00')[1]
 
         # if the message is really short, wrap it up
-        if 'DONE' in message.data[-8:]:
+        if bytes('DONE', "utf-8") in message.data[-8:]:
             self.sending_binary = False
-            f['data'] = message.data.split('DATA')[1][4:-8]
+            f['data'] = message.data.split(bytes('DATA', "utf-8"))[1][4:-8]
             self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'OKAY')
             self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
             self.dump_file(f)
         else:
-            f['data'] = message.data.split('DATA')[1][4:]
+            f['data'] = message.data.split(bytes('DATA', "utf-8"))[1][4:]
 
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
 
@@ -325,7 +328,7 @@ class ADBConnection(threading.Thread):
                 continue
             # look for the data header that is first sent when initiating a data connection
             #  /sdcard/stuff/exfiltrator-network-io.PNG,33206DATA
-            elif 'DATA' in message.data[:128]:
+            elif bytes('DATA', "utf-8") in message.data[:128]:
                 f = self.recv_binary(message, f)
                 continue
             else:   # regular flow
@@ -336,7 +339,7 @@ class ADBConnection(threading.Thread):
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     # why do I have to send the command twice??? science damn it!
                     self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x07\x00\x00\x00')
-                elif states[-1] == protocol.CMD_WRTE and 'QUIT' in message.data:
+                elif states[-1] == protocol.CMD_WRTE and bytes('QUIT', "utf-8") in message.data:
                     logger.debug("Received quit command.")
                     #self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     self.send_message(protocol.CMD_CLSE, 2, message.arg0, '')
@@ -354,13 +357,13 @@ class ADBConnection(threading.Thread):
                     if len(message.data) > 8:
                         self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x01\x00\x00\x00')
                         filename = message.data[8:]
-                elif states[-1] == protocol.CMD_OPEN and 'shell' in message.data:
+                elif states[-1] == protocol.CMD_OPEN and bytes('shell', "utf-8") in message.data:
                     logger.debug("Received shell command.")
                     self.recv_shell_cmd(message)
                 elif states[-1] == protocol.CMD_CNXN:
                     logger.debug("Received connection command.")
                     self.send_message(protocol.CMD_CNXN, 0x01000000, 4096, DEVICE_ID)
-                elif states[-1] == protocol.CMD_OPEN and 'sync' not in message.data:
+                elif states[-1] == protocol.CMD_OPEN and bytes('sync', "utf-8") not in message.data:
                     logger.debug("Received sync command.")
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                 elif states[-1] == protocol.CMD_OPEN:
