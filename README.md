@@ -23,7 +23,7 @@ More advanced commands (like native directory listing and having and interactive
 # OK OK, how do I get it started?
 Just start the script in python:
 
-`nohup python run.py &`
+`nohup python3 run.py &`
 
 Just like that, shouldn't have any more complex dependencies.
 
