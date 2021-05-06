@@ -18,7 +18,7 @@ Right now you can `adb connect`, `adb push` and `adb shell` into it. All of the 
 Responses to shell commands can easily be added by editing the `responses.py` file, currently only the `adb shell ls` will return a unique response. All other commands will respond with `command not found`
 
 ## What doesn't work?
-More advanced commands (like native directory listing and having and interactive shell) won't work. The main reason is that I haven't found any kind of malware to take advantage of mechanisms like this. I've also had to reverse engineer the protocol flow by hand, so please also provide a **.pcap** when logging an issue so I can look into it (or VERY exact steps for reproduction). Any improvements will be more than welcome.
+More advanced commands (like native directory listing and having an interactive shell) won't work. The main reason is that I haven't found any kind of malware to take advantage of mechanisms like this. I've also had to reverse engineer the protocol flow by hand, so please also provide a **.pcap** when logging an issue so I can look into it (or VERY exact steps for reproduction). Any improvements will be more than welcome.
 
 # OK OK, how do I get it started?
 Just start the script in python:
