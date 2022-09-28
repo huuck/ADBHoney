@@ -11,8 +11,12 @@ import struct
 import queue as Queue
 import json
 import time
+import re
 import sys
 import os
+import requests
+from requests import RequestException
+from urllib.parse import urlparse
 
 #package imports
 from .config import CONFIG, OUTPUT_PLUGINS
@@ -28,6 +32,7 @@ MAX_EMPTY_PACKETS = 360
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
 log_q = Queue.Queue()
+download_q = Queue.Queue()
 
 class OutputLogger():
     def __init__(self, log_q):
@@ -41,7 +46,7 @@ class OutputLogger():
     def info(self, message):
         level = logging.INFO
         self.log_q.put((message, level))
-    
+
     def error(self, message):
         level = logging.ERROR
         self.log_q.put((message, level))
@@ -50,6 +55,68 @@ class OutputLogger():
         self.log_q.put(message)
 
 logger = OutputLogger(log_q)
+
+
+class UrlDownloader(threading.Thread):
+    def __init__(self):
+        logger.debug("Creating UrlDownloader!")
+        threading.Thread.__init__(self)
+        self.session = requests.session()
+        self.session.headers.update({'User-Agent': 'curl/7.73.0'})
+        self.process = True
+
+    def run(self):
+        logger.debug("Starting UrlDownloader!")
+        DL_DIR = CONFIG.get('honeypot', 'download_dir')
+        HTTP_TIMEOUT = CONFIG.getint('honeypot', 'http_timeout', fallback=45)
+        if DL_DIR and not os.path.exists(DL_DIR):
+            os.makedirs(DL_DIR)
+        while not download_q.empty() or self.process:
+            try:
+                url, session = download_q.get(timeout=.1)
+                filename = os.path.basename(urlparse(url).path)
+            except Queue.Empty:
+                continue
+
+            try:
+                response = self.session.get(url, timeout=HTTP_TIMEOUT)
+            except (OSError, RequestException):
+                logger.debug(f"Failed to Download {url}")
+                continue
+
+            data = response.content
+            if (data == None) or  (len(data)==0):
+                continue
+            sha256sum = hashlib.sha256(data).hexdigest()
+            fn = '{}.raw'.format(sha256sum)
+            fp = os.path.join(DL_DIR, fn)
+
+            logger.info('File downloaded: {}, name: {}, bytes: {}'.format(fp, filename, len(data)))
+            obj = {
+                "eventid": "adbhoney.session.file_download",
+                "src_url": url,
+                "shasum": sha256sum,
+                "outfile": fp,
+                "filename": filename,
+                "session" : session
+            }
+            #Don't overwrite the file if it already exists
+            if not os.path.exists(fp):
+                with open(fp, 'wb') as file_out:
+                    file_out.write(response.content)
+                    file_out.flush()
+            #Report on downloaded file after write and close.
+            self.report(obj)
+
+    def stop(self):
+        self.process = False
+
+    def report(self, obj):
+        obj['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        obj['unixtime'] = int(time.time())
+        obj['sensor'] = CONFIG.get('honeypot', 'hostname')
+        logger.debug("Placing {} on log_q".format(obj))
+        logger.write(obj)
 
 class OutputWriter(threading.Thread):
     def __init__(self):
@@ -77,11 +144,11 @@ class OutputWriter(threading.Thread):
 
     def stop(self):
         self.process = False
-    
+
     def write(self, log):
         for writer in self.output_writers:
             writer.write(log)
-    
+
     def log(self, log, level):
         first_logger = self.output_writers[0]
         if first_logger.__name__ == 'output_log':
@@ -92,6 +159,8 @@ class ADBConnection(threading.Thread):
         threading.Thread.__init__(self)
         self.conn = conn
         self.addr = addr
+        self.http_download = CONFIG.getboolean('honeypot','http_download', fallback=False)
+        self.url_regex = re.compile(r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))")
         self.run()
 
     def report(self, obj):
@@ -159,7 +228,7 @@ class ADBConnection(threading.Thread):
             logger.info("Connection reset by peer.")
             raise EOFError
         return data
-    
+
     def parse_data(self, data):
         try:
             message = protocol.AdbMessage.decode(data)[0]
@@ -264,7 +333,7 @@ class ADBConnection(threading.Thread):
     def recv_shell_cmd(self, message):
         logger.debug("Entering recv_shell_cmd")
         self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
-        
+
         #command will be 'shell:cd /;wget http://someresource.com/test.sh\x00'
         #Remove first six chars and last null byte.
         cmd = str(message.data[6:-1], "utf-8")
@@ -286,6 +355,9 @@ class ADBConnection(threading.Thread):
             "src_ip": self.addr[0],
         }
         self.report(obj)
+        if(self.http_download):
+            for url in self.url_regex.findall(cmd):
+                download_q.put((url[0],self.session),timeout=.1)
 
     def process_connection(self):
         start = time.time()
@@ -321,7 +393,7 @@ class ADBConnection(threading.Thread):
 
             # keep a record of all the previous states in order to handle some weird cases
             states.append(message.command)
-            
+
             #Continue receiving binary
             if self.sending_binary:
                 f = self.recv_binary_chunk(message, data, f)
@@ -335,7 +407,10 @@ class ADBConnection(threading.Thread):
                 if len(states) >= 2 and states[-2:] == [protocol.CMD_WRTE, protocol.CMD_WRTE]:
                     logger.debug("Received Write/Write")
                     # last block of messages before the big block of data
-                    filename = str(message.data, "utf-8")
+                    try:
+                        filename = str(message.data, "utf-8")
+                    except UnicodeDecodeError as err:
+                        filename = str(binascii.hexlify(message.data), "utf-8")
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     # why do I have to send the command twice??? science damn it!
                     self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x07\x00\x00\x00')
@@ -356,7 +431,10 @@ class ADBConnection(threading.Thread):
                     self.send_message(protocol.CMD_OKAY, 2, message.arg0, '')
                     if len(message.data) > 8:
                         self.send_twice(protocol.CMD_WRTE, 2, message.arg0, 'STAT\x01\x00\x00\x00')
-                        filename = str(message.data[8:], "utf-8")
+                        try:
+                            filename = str(message.data, "utf-8")
+                        except UnicodeDecodeError as err:
+                            filename = str(binascii.hexlify(message.data), "utf-8")
                 elif states[-1] == protocol.CMD_OPEN and bytes('shell', "utf-8") in message.data:
                     logger.debug("Received shell command.")
                     self.recv_shell_cmd(message)
@@ -424,10 +502,13 @@ class ADBHoneyPot:
             self.sock.close()
             if output_writer:
                 output_writer.stop()
+            if downloader:
+                downloader.stop()
 
 def main():
     global logger
     global output_writer
+    global downloader
 
     # Eventually these will be filled from a config file
     parser = ArgumentParser()
@@ -457,7 +538,11 @@ def main():
 
     output_writer = OutputWriter()
     output_writer.start()
-    
+
+    if CONFIG.getboolean('honeypot','http_download', fallback=False):
+        downloader = UrlDownloader()
+        downloader.start()
+
     logger.info("Configuration loaded with {} as output plugins".format(OUTPUT_PLUGINS))
 
     honeypot = ADBHoneyPot()
