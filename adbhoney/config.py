@@ -5,7 +5,6 @@ import os
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('config')
-
 log_levels = {
         'debug': logging.DEBUG,
         'info': logging.INFO,
@@ -15,7 +14,8 @@ log_levels = {
 
 def read_config(cfg_file):
     config = ConfigParser.ConfigParser()
-    config.readfp(open(cfg_file))
+    with open(cfg_file) as f:
+        config.read_file(f)
     return config
 
 def get_output_plugins(config):
@@ -34,14 +34,11 @@ def get_config():
         if os.path.exists(l):
             cfg_file = l
             break
-
     if not cfg_file:
         logger.error("Could not find config file!")
         sys.exit(1)
-
     logger.info("Loading config from {}".format(cfg_file))
     config = read_config(cfg_file)
-
     return config
 
 CONFIG = get_config()
