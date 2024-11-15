@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 from argparse import ArgumentParser
 from datetime import datetime
@@ -29,6 +29,7 @@ __version__ = '1.00'
 MAX_READ_COUNT = 4096 * 4096
 # sleep 1 second after each empty packets, wait 1 hour in total
 MAX_EMPTY_PACKETS = 360
+IDLE_TIMEOUT = 300 # seconds
 
 DEVICE_ID = CONFIG.get('honeypot', 'device_id')
 log_q = Queue.Queue()
@@ -187,6 +188,7 @@ class ADBConnection(threading.Thread):
     def recv_data(self):
         debug_content = bytes()
         empty_packets = 0
+        self.conn.settimeout(1.0) # Set socket timeout to 1 second
         try:
             command = self.conn.recv(4)
             if not command:
@@ -194,7 +196,7 @@ class ADBConnection(threading.Thread):
                 if empty_packets > MAX_EMPTY_PACKETS:
                     return None
                 # wait for more data
-                time.sleep(1)
+                time.sleep(0.1)
                 return None
             empty_packets = 0
             arg1 = self.conn.recv(4)
@@ -216,6 +218,7 @@ class ADBConnection(threading.Thread):
                     # don't overread the content of the next data packet
                     bytes_to_read = data_length - len(data_content)
                     data_content += self.conn.recv(bytes_to_read)
+                    time.sleep(0.1)
             # check integrity of read data
             if len(data_content) < data_length:
                 logger.error("data content length is greater than data_length, corrupt data!")
@@ -224,6 +227,9 @@ class ADBConnection(threading.Thread):
             else:
                 # assemble a full data packet as per ADB specs
                 data = command + arg1 + arg2 + data_length_raw + data_crc + magic + data_content
+        except socket.timeout:
+            logger.debug("Socket timeout - no data received")
+            return None
         except Exception as e:
             logger.info("Connection reset by peer.")
             raise EOFError
@@ -376,16 +382,28 @@ class ADBConnection(threading.Thread):
         states = []
         self.sending_binary = False
         f = {"name": "", "data": ""}
+        # Track the last active time for idle timeout
+        last_active_time = time.time()
         filename = 'unknown'
         closedmessage = 'Connection closed'
         while True:
             try:
                 data = self.recv_data()
+                if data is None:
+                    # Avoid tight loop when no data is received
+                    time.sleep(0.1)
+                    # Check if idle timeout is reached
+                    if time.time() - last_active_time > IDLE_TIMEOUT:
+                        logger.info("Idle timeout reached. Closing connection.")
+                        self.conn.close()
+                        break
+                    continue
+                else:
+                    # Update last active time since we received data
+                    last_active_time = time.time()
             except EOFError:
-                break
-
-            if not data:
-                logger.info("data is none?: {}".format(data))
+                logger.info("Connection reset by peer.")
+                self.conn.close()
                 break
 
             logger.debug("Received data of length: {}".format(len(data)))
