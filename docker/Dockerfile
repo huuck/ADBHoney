@@ -1,8 +1,8 @@
-FROM python:3.6-alpine3.9
+FROM python:3.12-alpine3.21
 
 RUN apk update && apk add git
 
-RUN git clone https://github.com/pieterbork/ADBHoney.git
+RUN git clone https://github.com/huuck/ADBHoney
 
 WORKDIR ADBHoney
 COPY entrypoint.sh /
